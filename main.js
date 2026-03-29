@@ -4,8 +4,10 @@
 // Do NOT hardcode content here — edit data/data.js instead.
 // ================================================================
 
+let po=false;
+
 /* ── Content injection (runs before entry animation) ─────────────── */
-(function injectContent(){
+try{(function injectContent(){
   const D = FIZZ_DATA;
 
   // ── Logo images ──────────────────────────────────────────────
@@ -105,7 +107,7 @@
   function setHref(sel, href){
     document.querySelectorAll(sel).forEach(el => { el.href = href; });
   }
-})();
+})();}catch(e){console.warn("FIZZ: data.js not loaded",e);}
 
 
 /* ── Glass surface injection ─────────────────────────────────────── */
@@ -304,7 +306,7 @@ function initGSAP(){
 
 
 /* ── Side panel ──────────────────────────────────────────────────── */
-let po=false;
+
 function togglePanel(){
   po=!po;
   document.getElementById('panel').classList.toggle('open',po);
