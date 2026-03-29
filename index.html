@@ -167,7 +167,7 @@ footer p{font-family:'Outfit',sans-serif;font-size:10px;text-transform:uppercase
 .trig.active .tdot{background:#1ed760;box-shadow:0 0 8px #1ed760;animation:pulse 1.5s infinite}
 .trig>span{position:relative;z-index:25}
 .panel{position:fixed;top:0;right:-420px;bottom:0;width:390px;z-index:400;display:flex;flex-direction:column;transition:right .48s var(--E);background:rgba(4,4,16,0.82);backdrop-filter:blur(38px) saturate(170%);-webkit-backdrop-filter:blur(38px) saturate(170%);border-left:1px solid rgba(255,255,255,0.08);box-shadow:-14px 0 60px rgba(0,0,0,0.75);overflow:hidden}
-.panel::before{content:'';position:absolute;left:0;top:0;bottom:0;width:1.5px;z-index:50;background:linear-gradient(180deg,transparent 0%,rgba(42,79,255,0.5) 20%,rgba(100,60,255,0.4) 50%,rgba(42,79,255,0.5) 80%,transparent 100%);filter:blur(0.5px)}
+.panel::before{content:'absolute;left:0;top:0;bottom:0;width:1.5px;z-index:50;background:linear-gradient(180deg,transparent 0%,rgba(42,79,255,0.5) 20%,rgba(100,60,255,0.4) 50%,rgba(42,79,255,0.5) 80%,transparent 100%);filter:blur(0.5px)}
 .panel.open{right:0}
 .p-head{padding:22px 22px 0;display:flex;align-items:center;justify-content:space-between}
 .p-brand{font-family:'Bricolage Grotesque',sans-serif;font-size:13px;font-weight:800;letter-spacing:.05em}
@@ -260,7 +260,7 @@ footer p{font-family:'Outfit',sans-serif;font-size:10px;text-transform:uppercase
            style="width:clamp(200px,30vw,420px);display:block;margin:0 auto;mix-blend-mode:screen;filter:drop-shadow(0 0 36px rgba(42,79,255,.70)) brightness(1.1)">
     </div>
     
-    <p class="e-sub" id="esub">Game Designer &amp; Developer</p>
+    <p class="e-sub" id="esub">Game Designer & Developer</p>
   </div>
   
   <div class="e-tap" id="etap"><span class="e-tap-label">Click anywhere to enter</span><div class="e-tap-arrow"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg></div></div>
@@ -282,14 +282,14 @@ footer p{font-family:'Outfit',sans-serif;font-size:10px;text-transform:uppercase
   </nav>
   
   <section class="hero">
-    <p class="hero-side gs-reveal">game designer &amp; developer</p>
+    <p class="hero-side gs-reveal">game designer & developer</p>
     <div class="hero-logo-wrap">
       
-      <img data-logo src="images/image1.png" alt="FIZZ" class="hero-logo gs-reveal" style="transform:translateX(18000px)">
+      <img data-logo src="images/image1.png" alt="FIZZ" class="hero-logo gs-reveal" style="margin-left: 20000px;">
     </div>
     <div class="hero-role gs-reveal">
-      <span class="role-main">Game Designer &amp; Developer</span>
-      <span class="role-sub">Experienced Roblox &amp; Discord Staff</span>
+      <span class="role-main">Game Designer & Developer</span>
+      <span class="role-sub">Experienced Roblox & Discord Staff</span>
     </div>
     <div class="hero-cta gs-reveal">
       <a id="cta-primary"   href="#contact" class="btn-solid" data-neon>Get in touch</a>
@@ -301,7 +301,7 @@ footer p{font-family:'Outfit',sans-serif;font-size:10px;text-transform:uppercase
   
   <section class="sec" id="currently">
     <div class="sec-head gs-fade-up">
-      <div class="sec-no">01 &mdash; Right now</div>
+      <div class="sec-no">01 — Right now</div>
       <h2 class="sec-title">Currently</h2>
     </div>
     <div class="c-grid">
@@ -322,7 +322,7 @@ footer p{font-family:'Outfit',sans-serif;font-size:10px;text-transform:uppercase
   
   <section class="sec" id="work">
     <div class="sec-head gs-fade-up">
-      <div class="sec-no">02 &mdash; Selected work</div>
+      <div class="sec-no">02 — Selected work</div>
       <h2 class="sec-title">Projects</h2>
     </div>
     <div class="g-grid" id="projects-grid">
@@ -379,7 +379,7 @@ footer p{font-family:'Outfit',sans-serif;font-size:10px;text-transform:uppercase
       <div class="pill-sep"></div>
       <a href="#" data-social-footer="roblox"            title="Roblox"            target="_blank" class="pill-a"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M4.686 0L0 19.314 19.314 24 24 4.686zM15.23 15.323l-6.201-1.601 1.6-6.201 6.201 1.6z"/></svg></a>
     </div>
-    <p>&copy; <span id="yr"></span> FIZZ &nbsp;&middot;&nbsp; all rights reserved</p>
+    <p>© <span id="yr"></span> FIZZ  ·  all rights reserved</p>
   </footer>
 </main>
 <button class="trig lq" id="trig" data-neon onclick="togglePanel()">
@@ -388,7 +388,7 @@ footer p{font-family:'Outfit',sans-serif;font-size:10px;text-transform:uppercase
 <div class="panel" id="panel">
   <div class="p-head">
     <span class="p-brand">FIZZ</span>
-    <button class="p-close" onclick="togglePanel()">&#x2715;</button>
+    <button class="p-close" onclick="togglePanel()">✕</button>
   </div>
   <div class="p-tabs">
     <button class="p-tab on"  onclick="switchTab(this,'music')">Music</button>
