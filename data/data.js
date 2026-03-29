@@ -142,9 +142,9 @@ const FIZZ_DATA = {
   // Used in: nav pill, hero contact button, contact section,
   //          side panel "Links" tab, and footer pill.
   socials: {
-    discordAccount:   { href: '#', label: 'Discord Account',   sub: 'View my profile' },
-    discordPortfolio: { href: '#', label: 'Discord Portfolio', sub: 'View my server'  },
-    roblox:           { href: '#', label: 'Roblox',            sub: 'My profile'      },
+    discordAccount:   { href: 'https://discord.com/users/1314690826483404955', label: 'Discord Account',   sub: 'View my profile' },
+    discordPortfolio: { href: 'https://discord.gg/HzQEEgFW2E', label: 'Discord Portfolio', sub: 'View my server'  },
+    roblox:           { href: 'https://www.roblox.com/users/4143060296/profile', label: 'Roblox',            sub: 'My profile'      },
   },
 
   // ── STATS ─────────────────────────────────────────────────────
