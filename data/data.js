@@ -57,7 +57,7 @@ const FIZZ_DATA = {
   // ── SITE META ─────────────────────────────────────────────────
   meta: {
     name:     'FIZZ',
-    subtitle: 'Game Designer',   // used in animated browser tab title
+    subtitle: 'Hire?',   // used in animated browser tab title
   },
 
   // ── ENTRY / SPLASH SCREEN ─────────────────────────────────────
@@ -103,7 +103,7 @@ const FIZZ_DATA = {
     },
     status: {
       value: 'Available',
-      sub:   'Open for projects',
+      sub:   'Open for projects & commissions',
     },
   },
 
@@ -114,7 +114,7 @@ const FIZZ_DATA = {
   projects: [
     {
       image:    'images/image2.png',  // 16:9 thumbnail, top of card
-      imageAlt: '',
+      imageAlt: 'images/image2.png',
       num:      '01',
       title:    'Vangaurd Site',
       desc:     'Facility RPG',
