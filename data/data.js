@@ -98,8 +98,8 @@ const FIZZ_DATA = {
   // ── CURRENTLY SECTION (01) ────────────────────────────────────
   currently: {
     workingOn: {
-      value: 'Placeholder',   // e.g. 'Roblox RPG'
-      sub:   'Placeholder',   // e.g. 'Release Q3 2026'
+      value: 'Vangaurd Site',   // e.g. 'Roblox RPG'
+      sub:   'Beta Release',   // e.g. 'Release Q3 2026'
     },
     status: {
       value: 'Available',
