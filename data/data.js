@@ -85,14 +85,14 @@ const FIZZ_DATA = {
   //   • Between "Now Playing" and "Contact"   → scrolls right-to-left
   // Add as many items as you like — they loop automatically.
   marquee: [
-    'marque1.png',
-    'Placeholder',
-    'Placeholder',
-    'Placeholder',
-    'Placeholder',
-    'Placeholder',
-    'Placeholder',
-    'Placeholder',
+    'Contributed to 1.4B Visits',
+    'Fast & Reliable',
+    'Contributed to 1.3M Subscribers',
+    'Staff in 250K+ Server',
+    'Flexible & Unlocked Rates',
+    'Modeler',
+    'Builder',
+    'Animator',
   ],
 
   // ── CURRENTLY SECTION (01) ────────────────────────────────────
