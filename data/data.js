@@ -116,9 +116,9 @@ const FIZZ_DATA = {
       image:    'images/image2.png',  // 16:9 thumbnail, top of card
       imageAlt: '',
       num:      '01',
-      title:    'Placeholder',
-      desc:     'Placeholder',
-      tag:      'Placeholder',
+      title:    'Vangaurd Site',
+      desc:     'Facility RPG',
+      tag:      'Dev Management',
     },
     {
       image:    'images/image3.png',
