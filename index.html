@@ -76,7 +76,7 @@ body::after{
 .e-center{position:relative;z-index:3;display:flex;flex-direction:column;align-items:center;pointer-events:none}
 .e-logo{opacity:0;transform:translateY(18px);animation:eFadeUp 1s var(--E) 0.3s forwards;text-align:center}
 .e-sub{font-family:'Outfit',sans-serif;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,.22);margin-top:22px;opacity:0;animation:eFadeUp 0.8s var(--E) 1.1s forwards}
-.e-tap{position:absolute;bottom:32px;left:50%;transform:translateX(-50%);font-family:'Outfit',sans-serif;font-size:10px;text-transform:uppercase;letter-spacing:.14em;color:rgba(255,255,255,.14);z-index:3;white-space:nowrap;opacity:0;animation:eFadeIn 0.6s ease 2s forwards,blink 2.6s ease-in-out 2.6s infinite}
+.e-tap{position:absolute;bottom:48px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:10px;z-index:3;white-space:nowrap;opacity:0;animation:eFadeIn 0.6s ease 1.8s forwards}.e-tap-label{font-family:'Outfit',sans-serif;font-size:11px;text-transform:uppercase;letter-spacing:.18em;color:rgba(255,255,255,.50);animation:blink 2.4s ease-in-out 2.4s infinite}.e-tap-arrow{width:36px;height:36px;border-radius:50%;border:1px solid rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.40);animation:arrowBounce 1.8s ease-in-out 2.4s infinite}@keyframes arrowBounce{0%,100%{transform:translateY(0);opacity:.40}50%{transform:translateY(5px);opacity:.75}}
 @keyframes eFadeUp{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
 @keyframes eFadeIn{from{opacity:0}to{opacity:1}}
 @keyframes blink{0%,100%{opacity:.14}55%{opacity:.30}}
@@ -290,13 +290,13 @@ footer p{font-family:'Outfit',sans-serif;font-size:10px;text-transform:uppercase
     <div class="e-logo" id="elogo">
       <!-- Logo: images/image1.png — injected by js/main.js from FIZZ_DATA.images.logo -->
       <img data-logo src="images/image1.png" alt="FIZZ"
-           style="width:clamp(160px,22vw,320px);filter:drop-shadow(0 0 36px rgba(42,79,255,.60));display:block;margin:0 auto">
+           style="width:clamp(200px,30vw,420px);display:block;margin:0 auto;mix-blend-mode:screen;filter:drop-shadow(0 0 36px rgba(42,79,255,.70)) brightness(1.1)">
     </div>
     <!-- Text injected from FIZZ_DATA.entry.subtitle -->
     <p class="e-sub" id="esub">Game Designer &amp; Developer</p>
   </div>
   <!-- Text injected from FIZZ_DATA.entry.tapText -->
-  <p class="e-tap" id="etap">Click anywhere to enter</p>
+  <div class="e-tap" id="etap"><span class="e-tap-label">Click anywhere to enter</span><div class="e-tap-arrow"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg></div></div>
 </div>
 
 <main id="main">
@@ -377,6 +377,13 @@ footer p{font-family:'Outfit',sans-serif;font-size:10px;text-transform:uppercase
 
   <!-- ── Now Playing mini card ───────────────────────────────────
        Music files loaded from music/ folder (see FIZZ_DATA.music) -->
+  <div class="sp-outer gs-fade-up">
+    <div class="sp-card lq" data-neon>
+      <div class="sp-lbl"><div class="dot-s"></div>Now Playing</div>
+      <iframe style="border-radius:12px" src="https://open.spotify.com/embed/track/1dyTcli07c77mtQK3ahUZR?utm_source=generator" width="100%" height="352" frameBorder="0" allowfullscreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>
+    </div>
+  </div>
+
   <div class="sp-outer gs-fade-up">
     <div class="sp-card lq np-mini" data-neon id="np-mini-card">
       <div class="sp-lbl"><div class="dot-s" id="np-dot"></div>Now Playing</div>
