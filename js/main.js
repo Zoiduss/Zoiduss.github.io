@@ -272,255 +272,359 @@ function tick(){
   }
 }
 setTimeout(tick,2200);
-(function(){
-  const MC      = (typeof FIZZ_DATA!=='undefined' && FIZZ_DATA.music) || {};
-  const FOLDER  = MC.folder    || 'music/';
-  const MAX     = MC.maxTracks || 10;
-  const AUDIO_X = MC.audioExts || ['mp3','ogg','wav'];
-  const COVER_X = MC.coverExts || ['jpg','png','webp'];
-  const TITLES  = MC.titles    || {};
 
-  let queue=[], current=0, isPlaying=false;
-  // WebAudio — created once, on first user gesture
-  let audioCtx=null, analyser=null, srcNode=null, vizReady=false, rafId=null;
+// ── MUSIC PLAYER ────────────────────────────────────────────────────────────
+(function () {
 
-  const audio  = document.getElementById('mp-audio');
-  const vis    = document.getElementById('mp-vis');
-  const visCtx = vis ? vis.getContext('2d') : null;
+  // ── Config ────────────────────────────────────────────────────────────────
+  var MC     = (typeof FIZZ_DATA !== 'undefined' && FIZZ_DATA.music) || {};
+  var FOLDER = MC.folder    || 'music/';
+  var MAX    = MC.maxTracks || 50;
+  var AX     = MC.audioExts || ['mp3', 'ogg', 'wav'];
+  var CX     = MC.coverExts || ['jpg', 'jpeg', 'png', 'webp'];
+  var TITLES = MC.titles    || {};
 
-  // ── AUDIO CONTEXT INIT (call once, inside a user gesture) ──────────────
-  function initAudio(){
-    if(vizReady) return true;
-    try{
-      audioCtx  = new (window.AudioContext||window.webkitAudioContext)();
-      analyser  = audioCtx.createAnalyser();
+  // ── State ─────────────────────────────────────────────────────────────────
+  var queue     = [];
+  var curIdx    = 0;
+  var isPlaying = false;
+
+  // ── Web Audio (created once, inside a user-gesture) ───────────────────────
+  var audioCtx  = null;
+  var analyser  = null;
+  var srcNode   = null;
+  var audioReady = false;
+  var rafId      = null;
+
+  // ── DOM refs ──────────────────────────────────────────────────────────────
+  var audio  = document.getElementById('mp-audio');
+  var vis    = document.getElementById('mp-vis');
+  var visCtx = vis ? vis.getContext('2d') : null;
+  if (!audio) return; // nothing to attach to
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // 1.  WEB AUDIO — initialise once, inside a real user gesture
+  // ══════════════════════════════════════════════════════════════════════════
+  function initWebAudio() {
+    if (audioReady) return;
+    try {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      analyser = audioCtx.createAnalyser();
       analyser.fftSize = 256;
-      srcNode   = audioCtx.createMediaElementSource(audio);
+      analyser.smoothingTimeConstant = 0.8;
+      srcNode  = audioCtx.createMediaElementSource(audio);
       srcNode.connect(analyser);
       analyser.connect(audioCtx.destination);
-      vizReady  = true;
-      return true;
-    }catch(e){
-      console.warn('AudioContext init failed:', e);
-      // Audio will still play through default output — visualizer just won't work
-      return false;
+      audioReady = true;
+    } catch (e) {
+      console.warn('[player] AudioContext failed:', e);
+      // audio still plays through default output; visualiser just won't show
     }
   }
 
-  // ── CORE PLAY (always called inside or chained from a user gesture) ────
-  async function doPlay(){
-    initAudio();
-    if(audioCtx && audioCtx.state==='suspended') await audioCtx.resume().catch(()=>{});
-    await audio.play();
-    if(vizReady && !rafId) drawVis();
+  // ══════════════════════════════════════════════════════════════════════════
+  // 2.  CORE PLAY  — always call synchronously from a user gesture.
+  //     Returns a Promise so callers can .catch() if needed.
+  // ══════════════════════════════════════════════════════════════════════════
+  function startPlay() {
+    initWebAudio();
+    var resumeP = (audioCtx && audioCtx.state === 'suspended')
+      ? audioCtx.resume()
+      : Promise.resolve();
+
+    return resumeP.then(function () {
+      return audio.play();
+    }).then(function () {
+      if (audioReady && !rafId) drawVis();
+    }).catch(function (e) {
+      console.warn('[player] play() blocked:', e && e.name);
+    });
   }
 
-  // ── LOAD TRACK ──────────────────────────────────────────────────────────
-  // IMPORTANT: never call audio.load() after the AudioContext has taken
-  // ownership — it breaks the MediaElementSource chain and wipes duration.
-  function loadTrack(idx, autoplay){
-    if(!queue.length) return;
-    current = (idx+queue.length) % queue.length;
-    const t = queue[current];
+  // ══════════════════════════════════════════════════════════════════════════
+  // 3.  LOAD TRACK
+  //     CRITICAL: do NOT call audio.load() after createMediaElementSource()
+  //     has taken ownership — it severs the Web Audio routing in Safari and
+  //     causes race conditions in Chrome.  Setting audio.src is sufficient;
+  //     the browser's "update source" algorithm handles the rest, and play()
+  //     will fetch the new file automatically.
+  // ══════════════════════════════════════════════════════════════════════════
+  function loadTrack(idx, autoplay) {
+    if (!queue.length) return;
+    curIdx = ((idx % queue.length) + queue.length) % queue.length;
+    var t  = queue[curIdx];
 
     audio.src = t.src;
-    // Always call load() so the new source is properly queued.
-    // Setting src alone is not guaranteed to flush the old resource in all browsers.
-    // This is safe even after createMediaElementSource() has taken ownership.
-    audio.load();
+    // Only call load() before the AudioContext has been set up — after that,
+    // load() is forbidden (see note above).
+    if (!audioReady) audio.load();
 
-    audio.volume = (document.getElementById('mp-vol')?.value ?? 80) / 100;
+    // Restore volume from slider
+    var volEl = document.getElementById('mp-vol');
+    audio.volume = volEl ? (volEl.value / 100) : 0.8;
 
-    // ── update cover ──
-    const img = document.getElementById('mp-cover-img');
-    const ph  = document.getElementById('mp-cover-ph');
-    const bg  = document.getElementById('mp-cover-bg');
-    if(img && ph){
-      if(t.cover){
-        img.src = t.cover; img.style.display='block'; ph.style.display='none';
-        if(bg) bg.style.backgroundImage = `url('${t.cover}')`;
+    // ── Cover art ───────────────────────────────────────────────
+    var img = document.getElementById('mp-cover-img');
+    var ph  = document.getElementById('mp-cover-ph');
+    var bg  = document.getElementById('mp-cover-bg');
+    if (img && ph) {
+      if (t.cover) {
+        img.src = t.cover;
+        img.style.display = 'block';
+        ph.style.display  = 'none';
+        if (bg) bg.style.backgroundImage = "url('" + t.cover + "')";
       } else {
-        img.style.display='none'; ph.style.display='flex';
-        if(bg) bg.style.backgroundImage = '';
+        img.style.display = 'none';
+        ph.style.display  = 'flex';
+        if (bg) bg.style.backgroundImage = '';
       }
     }
-    const mc = document.getElementById('np-mini-cover');
-    if(mc) mc.innerHTML = t.cover
-      ? `<img src="${t.cover}" style="width:100%;height:100%;object-fit:cover;border-radius:10px">`
-      : `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" opacity=".35"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>`;
+    var miniCover = document.getElementById('np-mini-cover');
+    if (miniCover) {
+      miniCover.innerHTML = t.cover
+        ? '<img src="' + t.cover + '" style="width:100%;height:100%;object-fit:cover;border-radius:10px">'
+        : '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" opacity=".35"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>';
+    }
 
-    // ── update text UI ──
-    const el  = id => document.getElementById(id);
-    const n   = queue.length;
-    if(el('mp-title'))      el('mp-title').textContent      = t.title;
-    if(el('mp-artist'))     el('mp-artist').textContent     = t.artist;
-    if(el('mp-idx'))        el('mp-idx').textContent        = `${current+1} / ${n}`;
-    if(el('np-mini-title')) el('np-mini-title').textContent = t.title;
-    if(el('np-mini-sub'))   el('np-mini-sub').textContent   = t.artist || `Track ${t.n} of ${n}`;
+    // ── Text ────────────────────────────────────────────────────
+    var n  = queue.length;
+    var el = function (id) { return document.getElementById(id); };
+    if (el('mp-title'))      el('mp-title').textContent      = t.title;
+    if (el('mp-artist'))     el('mp-artist').textContent     = t.artist || '';
+    if (el('mp-idx'))        el('mp-idx').textContent        = (curIdx + 1) + ' / ' + n;
+    if (el('np-mini-title')) el('np-mini-title').textContent = t.title;
+    if (el('np-mini-sub'))   el('np-mini-sub').textContent   = t.artist || ('Track ' + t.n + ' of ' + n);
 
     renderQueue();
-    if(autoplay) doPlay().catch(e=>console.error('autoplay failed:', e));
+    if (autoplay) startPlay();
   }
 
-  // ── PUBLIC CONTROLS ────────────────────────────────────────────────────
-  async function mpTogglePlay(){
-    if(!queue.length) return;
-    if(audio.paused){
-      await doPlay().catch(e=>console.error('togglePlay failed:', e));
+  // ══════════════════════════════════════════════════════════════════════════
+  // 4.  PUBLIC CONTROLS  (exposed on window for onclick= attributes)
+  // ══════════════════════════════════════════════════════════════════════════
+  function mpTogglePlay() {
+    if (!queue.length) return;
+    if (audio.paused) {
+      startPlay();
     } else {
       audio.pause();
     }
   }
-  function mpPrev(){ loadTrack(current-1, true); }
-  function mpNext(){ loadTrack(current+1, true); }
+  function mpPrev() { loadTrack(curIdx - 1, true); }
+  function mpNext() { loadTrack(curIdx + 1, true); }
+
   window.mpTogglePlay = mpTogglePlay;
-  window.mpPrev = mpPrev;
-  window.mpNext = mpNext;
-  window.loadTrack = (idx, play) => loadTrack(idx, play);
+  window.mpPrev       = mpPrev;
+  window.mpNext       = mpNext;
+  window.loadTrack    = function (idx, p) { loadTrack(idx, !!p); };
 
-  // ── AUDIO EVENTS ───────────────────────────────────────────────────────
-  audio.addEventListener('play',        ()=>{ isPlaying=true;  syncUI(); });
-  audio.addEventListener('pause',       ()=>{ isPlaying=false; syncUI(); });
-  audio.addEventListener('ended',       ()=>{ mpNext(); });
-  audio.addEventListener('timeupdate',  updateProgress);
+  // ══════════════════════════════════════════════════════════════════════════
+  // 5.  AUDIO EVENTS
+  // ══════════════════════════════════════════════════════════════════════════
+  audio.addEventListener('play',       function () { isPlaying = true;  syncUI(); });
+  audio.addEventListener('pause',      function () { isPlaying = false; syncUI(); });
+  audio.addEventListener('ended',      function () { mpNext(); });
+  audio.addEventListener('timeupdate', updateProgress);
 
-  function syncUI(){
-    const iconPath = isPlaying
-      ? '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>'
-      : '<path d="M8 5v14l11-7z"/>';
-    ['mp-play-icon','np-mini-icon'].forEach(id=>{
-      const el=document.getElementById(id); if(el) el.innerHTML=iconPath;
+  function syncUI() {
+    var playPath  = '<path d="M8 5v14l11-7z"/>';
+    var pausePath = '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>';
+    var iconPath  = isPlaying ? pausePath : playPath;
+
+    ['mp-play-icon', 'np-mini-icon'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.innerHTML = iconPath;
     });
-    const dot=document.getElementById('np-dot');
-    if(dot) dot.style.animation = isPlaying ? 'pulse 2s infinite' : 'none';
-    const trig=document.getElementById('trig');
-    if(trig) trig.classList.toggle('playing', isPlaying);
-    renderQueue(); // refresh bars in queue list
+
+    var dot = document.getElementById('np-dot');
+    if (dot) dot.style.animation = isPlaying ? 'pulse 2s infinite' : 'none';
+
+    var trig = document.getElementById('trig');
+    if (trig) trig.classList.toggle('playing', isPlaying);
+
+    renderQueue();
   }
 
-  function updateProgress(){
-    if(!audio.duration) return;
-    const pct = (audio.currentTime / audio.duration) * 100;
-    const fill = document.getElementById('mp-prog-fill');
-    const mini = document.getElementById('np-mini-fill');
-    const seek = document.getElementById('mp-seek');
-    if(fill) fill.style.width = pct+'%';
-    if(mini) mini.style.width = pct+'%';
-    if(seek) seek.value = pct;
-    const cur = document.getElementById('mp-cur');
-    const dur = document.getElementById('mp-dur');
-    if(cur) cur.textContent = fmt(audio.currentTime);
-    if(dur) dur.textContent = fmt(audio.duration);
+  function updateProgress() {
+    if (!audio.duration) return;
+    var pct  = (audio.currentTime / audio.duration) * 100;
+    var fill = document.getElementById('mp-prog-fill');
+    var mini = document.getElementById('np-mini-fill');
+    var seek = document.getElementById('mp-seek');
+    if (fill) fill.style.width = pct + '%';
+    if (mini) mini.style.width = pct + '%';
+    if (seek) seek.value = pct;
+    var curEl = document.getElementById('mp-cur');
+    var durEl = document.getElementById('mp-dur');
+    if (curEl) curEl.textContent = fmt(audio.currentTime);
+    if (durEl) durEl.textContent = fmt(audio.duration);
   }
 
-  function fmt(s){
-    if(!s||isNaN(s)) return '0:00';
-    const m=Math.floor(s/60), sec=Math.floor(s%60);
-    return m+':'+String(sec).padStart(2,'0');
+  function fmt(s) {
+    if (!s || isNaN(s)) return '0:00';
+    var m   = Math.floor(s / 60);
+    var sec = Math.floor(s % 60);
+    return m + ':' + (sec < 10 ? '0' : '') + sec;
   }
 
-  document.getElementById('mp-seek')?.addEventListener('input', function(){
-    if(audio.duration) audio.currentTime = (this.value/100)*audio.duration;
-  });
-  document.getElementById('mp-vol')?.addEventListener('input', function(){
-    audio.volume = this.value/100;
-  });
+  var seekEl = document.getElementById('mp-seek');
+  if (seekEl) {
+    seekEl.addEventListener('input', function () {
+      if (audio.duration) audio.currentTime = (this.value / 100) * audio.duration;
+    });
+  }
+  var volEl2 = document.getElementById('mp-vol');
+  if (volEl2) {
+    volEl2.addEventListener('input', function () {
+      audio.volume = this.value / 100;
+    });
+  }
 
-  // ── QUEUE RENDER ───────────────────────────────────────────────────────
-  function renderQueue(){
-    const el=document.getElementById('mp-queue'); if(!el) return;
-    el.innerHTML=queue.map((t,i)=>{
-      const active = i===current ? 'active' : '';
-      const cover  = t.cover ? `<img src="${t.cover}" alt="">` : String(i+1);
-      const bars   = active && isPlaying
-        ? ['.4s','.6s','.5s'].map(d=>`<div class="mp-q-bar" style="--d:${d}"></div>`).join('')
+  // ══════════════════════════════════════════════════════════════════════════
+  // 6.  QUEUE RENDER
+  // ══════════════════════════════════════════════════════════════════════════
+  function renderQueue() {
+    var el = document.getElementById('mp-queue');
+    if (!el) return;
+    el.innerHTML = queue.map(function (t, i) {
+      var active = (i === curIdx) ? 'active' : '';
+      var cover  = t.cover ? '<img src="' + t.cover + '" alt="">' : String(i + 1);
+      var bars   = (active && isPlaying)
+        ? ['.4s', '.6s', '.5s'].map(function (d) {
+            return '<div class="mp-q-bar" style="--d:' + d + '"></div>';
+          }).join('')
         : '';
-      return `<div class="mp-q-item ${active}" onclick="loadTrack(${i},true)">
-        <div class="mp-q-thumb">${cover}</div>
-        <div class="mp-q-info">
-          <div class="mp-q-name">${t.title}</div>
-          <div class="mp-q-num">${t.artist||'Track '+t.n}</div>
-        </div>
-        ${bars?`<div class="mp-q-bars">${bars}</div>`:''}
-      </div>`;
+      return '<div class="mp-q-item ' + active + '" onclick="loadTrack(' + i + ',true)">'
+        + '<div class="mp-q-thumb">' + cover + '</div>'
+        + '<div class="mp-q-info">'
+        + '<div class="mp-q-name">' + t.title + '</div>'
+        + '<div class="mp-q-num">'  + (t.artist || 'Track ' + t.n) + '</div>'
+        + '</div>'
+        + (bars ? '<div class="mp-q-bars">' + bars + '</div>' : '')
+        + '</div>';
     }).join('');
   }
 
-  // ── VISUALIZER ─────────────────────────────────────────────────────────
-  function drawVis(){
-    if(!analyser||!vis||!visCtx) return;
-    const W=vis.offsetWidth*devicePixelRatio, H=vis.offsetHeight*devicePixelRatio;
-    if(vis.width!==W||vis.height!==H){ vis.width=W; vis.height=H; }
-    const data=new Uint8Array(analyser.frequencyBinCount);
+  // ══════════════════════════════════════════════════════════════════════════
+  // 7.  VISUALISER  (canvas 2-D bar graph)
+  // ══════════════════════════════════════════════════════════════════════════
+  function drawVis() {
+    // If we can't draw yet, null rafId so the next startPlay() call retries.
+    if (!analyser || !vis || !visCtx) { rafId = null; return; }
+
+    var dpr = window.devicePixelRatio || 1;
+    var W   = vis.offsetWidth  * dpr;
+    var H   = vis.offsetHeight * dpr;
+    if (vis.width !== W || vis.height !== H) { vis.width = W; vis.height = H; }
+
+    var data = new Uint8Array(analyser.frequencyBinCount);
     analyser.getByteFrequencyData(data);
-    visCtx.clearRect(0,0,W,H);
-    const bars=Math.min(60,data.length), gap=Math.ceil(W*0.008);
-    const barW=(W-gap*(bars-1))/bars, maxH=H*0.88;
-    for(let i=0;i<bars;i++){
-      const val=data[Math.floor(i*data.length/bars)]/255;
-      const h=Math.max(2*devicePixelRatio,val*maxH);
-      const x=i*(barW+gap), y=H-h;
-      const grad=visCtx.createLinearGradient(0,y,0,H);
-      grad.addColorStop(0,`rgba(77,110,255,${0.55+val*0.45})`);
-      grad.addColorStop(1,'rgba(42,79,255,0.18)');
-      visCtx.fillStyle=grad;
-      const r=Math.min(barW/2,3*devicePixelRatio);
-      visCtx.beginPath(); visCtx.roundRect(x,y,barW,h,[r,r,0,0]); visCtx.fill();
+    visCtx.clearRect(0, 0, W, H);
+
+    var bars = Math.min(60, data.length);
+    var gap  = Math.max(1, Math.ceil(W * 0.008));
+    var barW = (W - gap * (bars - 1)) / bars;
+    var maxH = H * 0.88;
+
+    for (var i = 0; i < bars; i++) {
+      var val  = data[Math.floor(i * data.length / bars)] / 255;
+      var h    = Math.max(2 * dpr, val * maxH);
+      var x    = i * (barW + gap);
+      var y    = H - h;
+      var grad = visCtx.createLinearGradient(0, y, 0, H);
+      grad.addColorStop(0, 'rgba(77,110,255,' + (0.55 + val * 0.45).toFixed(2) + ')');
+      grad.addColorStop(1, 'rgba(42,79,255,0.18)');
+      visCtx.fillStyle = grad;
+      var r = Math.min(barW / 2, 3 * dpr);
+      visCtx.beginPath();
+      // roundRect is not available in all browsers — fall back to rect
+      if (typeof visCtx.roundRect === 'function') {
+        visCtx.roundRect(x, y, barW, h, [r, r, 0, 0]);
+      } else {
+        visCtx.rect(x, y, barW, h);
+      }
+      visCtx.fill();
     }
+
     rafId = requestAnimationFrame(drawVis);
   }
 
-  // ── ENTRY CLICK ────────────────────────────────────────────────────────
-  let entryPlayed = false;
-  document.getElementById('enter')?.addEventListener('click', async ()=>{
-    if(entryPlayed) return;
-    entryPlayed = true;
-    if(queue.length){
-      await doPlay().catch(()=>{ entryPlayed=false; });
-    }
-    // If queue isn't ready yet the audio.play() call below in buildQueue handles it
-  });
-
-  // ── QUEUE BUILD ────────────────────────────────────────────────────────
-  async function probeFile(candidates){
-    for(const url of candidates){
-      try{ const r=await fetch(url,{method:'HEAD'}); if(r.ok) return url; }catch{}
-    }
-    return null;
-  }
-  async function probeTrack(n){
-    const srcs=AUDIO_X.map(e=>`${FOLDER}track${n}.${e}`);
-    const cvrs=COVER_X.map(e=>`${FOLDER}cover${n}.${e}`);
-    const [src,cover]=await Promise.all([probeFile(srcs),probeFile(cvrs)]);
-    if(!src) return null;
-    return {src,cover,title:TITLES[String(n)]||`Track ${n}`,artist:'',n};
-  }
-  async function buildQueue(){
-    if(Array.isArray(MC.tracks)&&MC.tracks.length){
-      queue=MC.tracks.map((t,i)=>({
-        src:   t.src,
-        cover: t.cover||null,
-        title: t.title||TITLES[String(i+1)]||`Track ${i+1}`,
-        artist:t.artist||'',
-        n:     i+1,
-      }));
-      return;
-    }
-    const tasks=[];
-    for(let i=1;i<=MAX;i++) tasks.push(probeTrack(i));
-    const results=await Promise.all(tasks);
-    for(const t of results){ if(!t) break; queue.push(t); }
+  // ══════════════════════════════════════════════════════════════════════════
+  // 8.  ENTRY CLICK  → attempt autoplay on the first user gesture
+  //     NOT async / NOT awaited — calling startPlay() synchronously keeps
+  //     the call inside the user-gesture trust window every browser needs.
+  // ══════════════════════════════════════════════════════════════════════════
+  var enterEl = document.getElementById('enter');
+  if (enterEl) {
+    enterEl.addEventListener('click', function () {
+      if (queue.length) startPlay();
+      // startPlay() catches its own errors — nothing further needed here
+    });
   }
 
-  buildQueue().then(()=>{
-    if(queue.length){
+  // ══════════════════════════════════════════════════════════════════════════
+  // 9.  BUILD QUEUE  then prime the first track
+  // ══════════════════════════════════════════════════════════════════════════
+  function probeFile(candidates) {
+    var i = 0;
+    function next() {
+      if (i >= candidates.length) return Promise.resolve(null);
+      var url = candidates[i++];
+      return fetch(url, { method: 'HEAD' })
+        .then(function (r) { return r.ok ? url : next(); })
+        .catch(function ()  { return next(); });
+    }
+    return next();
+  }
+
+  function probeTrack(n) {
+    var srcs = AX.map(function (e) { return FOLDER + 'track' + n + '.' + e; });
+    var cvrs = CX.map(function (e) { return FOLDER + 'cover' + n + '.' + e; });
+    return Promise.all([probeFile(srcs), probeFile(cvrs)]).then(function (res) {
+      var src   = res[0];
+      var cover = res[1];
+      if (!src) return null;
+      return { src: src, cover: cover || null, title: TITLES[String(n)] || 'Track ' + n, artist: '', n: n };
+    });
+  }
+
+  function buildQueue() {
+    if (Array.isArray(MC.tracks) && MC.tracks.length) {
+      queue = MC.tracks.map(function (t, i) {
+        return {
+          src:    t.src,
+          cover:  t.cover   || null,
+          title:  t.title   || TITLES[String(i + 1)] || 'Track ' + (i + 1),
+          artist: t.artist  || '',
+          n:      i + 1,
+        };
+      });
+      return Promise.resolve();
+    }
+    // Auto-probe fallback (sequential so we stop at the first gap)
+    var result = [];
+    function probe(n) {
+      if (n > MAX) return Promise.resolve();
+      return probeTrack(n).then(function (t) {
+        if (!t) return; // gap — stop
+        result.push(t);
+        return probe(n + 1);
+      });
+    }
+    return probe(1).then(function () { queue = result; });
+  }
+
+  buildQueue().then(function () {
+    if (queue.length) {
       loadTrack(0, false);
     } else {
-      ['mp-title','np-mini-title'].forEach(id=>{
-        const e=document.getElementById(id); if(e) e.textContent='No tracks found';
+      ['mp-title', 'np-mini-title'].forEach(function (id) {
+        var e = document.getElementById(id);
+        if (e) e.textContent = 'No tracks found';
       });
-      const sub=document.getElementById('np-mini-sub');
-      if(sub) sub.textContent='Add track1.mp3 to music/ folder';
+      var sub = document.getElementById('np-mini-sub');
+      if (sub) sub.textContent = 'Add track1.mp3 to music/ folder';
     }
   });
-})();
+
+}());
