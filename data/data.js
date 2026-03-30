@@ -110,7 +110,7 @@ const FIZZ_DATA = {
   currently: {
     workingOn: {
       value: 'Blackridge Detention Complex ',   // e.g. 'Roblox RPG'
-      sub:   'Developemnt',   // e.g. 'Release Q3 2026'
+      sub:   'In Developemnt',   // e.g. 'Release Q3 2026'
     },
     status: {
       value: 'Available',
