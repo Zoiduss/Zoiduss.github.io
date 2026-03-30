@@ -49,9 +49,20 @@ const FIZZ_DATA = {
     // Optional: override the auto-generated "Track N" title.
     // Key = track number (string), value = display title.
     titles: {
-      // '1': 'My Song Name',
-      // '2': 'Another Track',
+      '1': 'asa mitaka',
+      '2': 'Take A Slice',
+      '3': "you can't eat cats kevin",
+      '4': 'bleed',
     },
+    // Explicit track list — avoids HTTP HEAD probing so music loads
+    // reliably on any server. src/cover paths are relative to site root.
+    // Remove this array to fall back to auto-probing behaviour.
+    tracks: [
+      { src: 'music/track1.mp3', cover: 'music/cover1.jpg', title: 'asa mitaka',               artist: 'imylia, Marwick'   },
+      { src: 'music/track2.mp3', cover: 'music/cover2.jpg', title: 'Take A Slice',              artist: 'Glass Animals'     },
+      { src: 'music/track3.mp3', cover: 'music/cover3.jpg', title: "you can't eat cats kevin",  artist: 'Mom Jeans., Brond' },
+      { src: 'music/track4.mp3', cover: 'music/cover4.jpg', title: 'bleed',                     artist: 'Amotti'            },
+    ],
   },
 
   // ── SITE META ─────────────────────────────────────────────────
