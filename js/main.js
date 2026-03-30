@@ -5,9 +5,10 @@ try{(function injectContent(){
     el.src = D.images.logo;
   });
   const esub = document.getElementById('esub');
-  const etap = document.getElementById('etap');
-  if(esub) esub.textContent = D.entry.subtitle;
-  if(etap) etap.textContent = D.entry.tapText;
+  // FIX: only update the label span, not the whole #etap (would nuke the arrow child)
+  const etapLbl = document.querySelector('#etap .e-tap-label');
+  if(esub)    esub.textContent    = D.entry.subtitle;
+  if(etapLbl) etapLbl.textContent = D.entry.tapText;
   const heroSide = document.querySelector('.hero-side');
   if(heroSide) heroSide.textContent = D.hero.sideText;
   const roleMain = document.querySelector('.role-main');
@@ -210,8 +211,10 @@ function buildMQ(id){
   for(let i=0;i<10;i++) h+=`<div class="mq-item lq-lite"><span>${L[i%L.length]}</span></div>`;
   t.innerHTML=h+h;
 }
-buildMQ('mq1');
-buildMQ('mq2');
+// FIX: wrapped in try/catch — an uncaught throw here would halt all code below,
+// preventing the music player IIFE from ever running.
+try{ buildMQ('mq1'); }catch(e){}
+try{ buildMQ('mq2'); }catch(e){}
 function initGSAP(){
   gsap.registerPlugin(ScrollTrigger);
   gsap.utils.toArray('.gs-reveal').forEach((el,i)=>{
@@ -245,14 +248,20 @@ function switchTab(btn,id){
     const v=document.getElementById('tab-'+id); if(v) v.classList.add('on');
   },150);
 }
-const BORN = FIZZ_DATA.stats.bornDate;
+// FIX: wrapped in try/catch — bare top-level FIZZ_DATA access would halt
+// everything below (uptime, title ticker, music IIFE) if data.js has any issue.
+let BORN = 0;
+try{ BORN = FIZZ_DATA.stats.bornDate; }catch(e){}
 function uptime(){
   const el=document.getElementById('su'); if(!el) return;
   const ms=Date.now()-BORN, d=Math.floor(ms/86400000), h=Math.floor((ms%86400000)/3600000);
   el.textContent=d>=1?d+'d '+String(h).padStart(2,'0')+'h':String(h).padStart(2,'0')+'h';
 }
 uptime(); setInterval(uptime,1000);
-const PH=[FIZZ_DATA.meta.name, FIZZ_DATA.meta.subtitle];
+const PH=[
+  (typeof FIZZ_DATA!=='undefined'&&FIZZ_DATA.meta?.name)    || 'FIZZ',
+  (typeof FIZZ_DATA!=='undefined'&&FIZZ_DATA.meta?.subtitle) || 'Game Designer'
+];
 let pi=0,ci=0,dir=1;
 function tick(){
   const p=PH[pi];
@@ -268,12 +277,14 @@ function tick(){
 }
 setTimeout(tick,2200);
 (function(){
-  const MC       = FIZZ_DATA.music;
-  const FOLDER   = MC.folder;
-  const MAX      = MC.maxTracks;
-  const AUDIO_X  = MC.audioExts;
-  const COVER_X  = MC.coverExts;
-  const TITLES   = MC.titles || {};
+  // FIX: guard the whole music IIFE — if FIZZ_DATA.music is missing the player
+  // degrades gracefully instead of throwing and leaving the UI dead.
+  const MC = (typeof FIZZ_DATA!=='undefined' && FIZZ_DATA.music) || {};
+  const FOLDER   = MC.folder    || 'music/';
+  const MAX      = MC.maxTracks || 10;
+  const AUDIO_X  = MC.audioExts || ['mp3','ogg','wav'];
+  const COVER_X  = MC.coverExts || ['jpg','png','webp'];
+  const TITLES   = MC.titles    || {};
   let queue=[], current=0, isPlaying=false;
   let audioCtx, analyser, srcNode, rafId;
   const audio  = document.getElementById('mp-audio');
@@ -325,10 +336,10 @@ setTimeout(tick,2200);
     }
     const el=id=>document.getElementById(id);
     const n=queue.length;
-    if(el('mp-title'))    el('mp-title').textContent    = t.title;
-    if(el('mp-idx'))      el('mp-idx').textContent      = `${current+1} / ${n}`;
+    if(el('mp-title'))      el('mp-title').textContent      = t.title;
+    if(el('mp-idx'))        el('mp-idx').textContent        = `${current+1} / ${n}`;
     if(el('np-mini-title')) el('np-mini-title').textContent = t.title;
-    if(el('np-mini-sub'))   el('np-mini-sub').textContent  = `Track ${t.n} of ${n}`;
+    if(el('np-mini-sub'))   el('np-mini-sub').textContent   = `Track ${t.n} of ${n}`;
     renderQueue();
     if(autoplay) audio.play().catch(()=>{});
   }
