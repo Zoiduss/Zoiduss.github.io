@@ -56,9 +56,10 @@ try{(function injectContent(){
   const cDA = document.getElementById('ct-discord-account');
   const cDP = document.getElementById('ct-discord-portfolio');
   const cRB = document.getElementById('ct-roblox');
-  if(cDA){ cDA.textContent = S.discordAccount.label;   cDA.href = S.discordAccount.href; }
-  if(cDP){ cDP.textContent = S.discordPortfolio.label; cDP.href = S.discordPortfolio.href; }
-  if(cRB){ cRB.textContent = S.roblox.label;           cRB.href = S.roblox.href; }
+  function setText(el, text){ const s=el.querySelector('span'); (s||el).textContent=text; }
+  if(cDA){ setText(cDA, S.discordAccount.label);   cDA.href = S.discordAccount.href; }
+  if(cDP){ setText(cDP, S.discordPortfolio.label); cDP.href = S.discordPortfolio.href; }
+  if(cRB){ setText(cRB, S.roblox.label);           cRB.href = S.roblox.href; }
   const pDA = document.getElementById('p-discord-account');
   const pDP = document.getElementById('p-discord-portfolio');
   const pRB = document.getElementById('p-roblox');
@@ -311,7 +312,7 @@ setTimeout(tick,2200);
     initAudio();
     if(audioCtx && audioCtx.state==='suspended') await audioCtx.resume().catch(()=>{});
     await audio.play();
-    if(vizReady) drawVis();
+    if(vizReady && !rafId) drawVis();
   }
 
   // ── LOAD TRACK ──────────────────────────────────────────────────────────
@@ -323,9 +324,10 @@ setTimeout(tick,2200);
     const t = queue[current];
 
     audio.src = t.src;
-    // Only call load() before the AudioContext exists — once srcNode is connected,
-    // setting audio.src is enough; play() will fetch the new resource automatically.
-    if(!vizReady) audio.load();
+    // Always call load() so the new source is properly queued.
+    // Setting src alone is not guaranteed to flush the old resource in all browsers.
+    // This is safe even after createMediaElementSource() has taken ownership.
+    audio.load();
 
     audio.volume = (document.getElementById('mp-vol')?.value ?? 80) / 100;
 
@@ -391,6 +393,8 @@ setTimeout(tick,2200);
     });
     const dot=document.getElementById('np-dot');
     if(dot) dot.style.animation = isPlaying ? 'pulse 2s infinite' : 'none';
+    const trig=document.getElementById('trig');
+    if(trig) trig.classList.toggle('playing', isPlaying);
     renderQueue(); // refresh bars in queue list
   }
 
@@ -463,9 +467,7 @@ setTimeout(tick,2200);
       const r=Math.min(barW/2,3*devicePixelRatio);
       visCtx.beginPath(); visCtx.roundRect(x,y,barW,h,[r,r,0,0]); visCtx.fill();
     }
-    rafId = isPlaying
-      ? requestAnimationFrame(drawVis)
-      : data.every(v=>v===0) ? null : requestAnimationFrame(drawVis);
+    rafId = requestAnimationFrame(drawVis);
   }
 
   // ── ENTRY CLICK ────────────────────────────────────────────────────────
