@@ -285,19 +285,18 @@ setTimeout(tick,2200);
   const vis    = document.getElementById('mp-vis');
   const visCtx = vis ? vis.getContext('2d') : null;
 
-  // Wire entry click: unlock AudioContext (needed by autoplay policy) but don't auto-start
-  // music — user should press play explicitly so the panel button state is never confusing.
-  document.getElementById('enter')?.addEventListener('click',()=>{
-    pendingEntryPlay = false; // don't auto-play
-    // Warm up AudioContext inside the user gesture so future play() calls are never blocked
-    try{
-      if(!audioCtx){
-        const tmpCtx=new (window.AudioContext||window.webkitAudioContext)();
-        tmpCtx.resume().then(()=>tmpCtx.close()).catch(()=>{});
-      } else if(audioCtx.state==='suspended'){
-        audioCtx.resume().catch(()=>{});
-      }
-    }catch(e){}
+  // Wire entry click: init AudioContext + play inside the user gesture (nihi pattern).
+  document.getElementById('enter')?.addEventListener('click', async ()=>{
+    if(queue.length){
+      // Init visualizer here — inside the gesture — so AudioContext is created while
+      // the browser still considers this a trusted user interaction.
+      startVis();
+      if(audioCtx && audioCtx.state==='suspended') await audioCtx.resume().catch(()=>{});
+      audio.play().catch(()=>{});
+    } else {
+      // Queue not ready yet — flag it; buildQueue().then() will play once loaded.
+      pendingEntryPlay = true;
+    }
   });
 
   async function probeFile(candidates){
@@ -365,16 +364,28 @@ setTimeout(tick,2200);
     if(el('np-mini-title')) el('np-mini-title').textContent = t.title;
     if(el('np-mini-sub'))   el('np-mini-sub').textContent   = t.artist || `Track ${t.n} of ${n}`;
     renderQueue();
-    if(autoplay) audio.play().catch(()=>{});
-  }
-  function mpTogglePlay(){
-    if(!queue.length) return;
-    // If audio element hit an error, reset by reloading the current track
-    if(audio.error){ loadTrack(current, true); return; }
-    if(audio.paused){
-      // Resume AudioContext first if it was suspended (required after page focus loss)
+    if(autoplay){
       if(audioCtx && audioCtx.state==='suspended') audioCtx.resume().catch(()=>{});
-      audio.play().catch(()=>{ loadTrack(current, true); });
+      audio.play().catch(e=>console.error('loadTrack autoplay failed:', e));
+    }
+  }
+  async function mpTogglePlay(){
+    if(!queue.length) return;
+    if(audio.error){ loadTrack(current, false); return; }
+    if(audio.paused){
+      // Init AudioContext HERE inside the user gesture — not from an event listener.
+      // This matches the nihi pattern: init visualizer BEFORE calling play().
+      startVis();
+      if(audioCtx && audioCtx.state==='suspended'){
+        await audioCtx.resume().catch(()=>{});
+      }
+      try{
+        await audio.play();
+      } catch(e){
+        // play() rejected — reload track and retry once
+        loadTrack(current, false);
+        await audio.play().catch(e2=>console.error('Playback failed:', e2));
+      }
     } else {
       audio.pause();
     }
@@ -384,7 +395,8 @@ setTimeout(tick,2200);
   window.mpTogglePlay=mpTogglePlay;
   window.mpPrev=mpPrev;
   window.mpNext=mpNext;
-  audio.addEventListener('play',  ()=>{ isPlaying=true;  syncUI(); startVis(); });
+  // 'play' event: just sync UI — AudioContext is already set up by mpTogglePlay above.
+  audio.addEventListener('play',  ()=>{ isPlaying=true;  syncUI(); });
   audio.addEventListener('pause', ()=>{ isPlaying=false; syncUI(); });
   audio.addEventListener('ended', ()=>{ mpNext(); });
   audio.addEventListener('timeupdate', updateProgress);
@@ -489,6 +501,13 @@ setTimeout(tick,2200);
   buildQueue().then(()=>{
     if(queue.length){
       loadTrack(0,false);
+      if(pendingEntryPlay){
+        pendingEntryPlay=false;
+        // AudioContext was already unlocked by the entry click gesture — safe to call now.
+        startVis();
+        if(audioCtx && audioCtx.state==='suspended') audioCtx.resume().catch(()=>{});
+        audio.play().catch(()=>{});
+      }
     } else {
       ['mp-title','np-mini-title'].forEach(id=>{
         const e=document.getElementById(id); if(e) e.textContent='No tracks found';
