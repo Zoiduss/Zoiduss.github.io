@@ -5,7 +5,6 @@ try{(function injectContent(){
     el.src = D.images.logo;
   });
   const esub = document.getElementById('esub');
-  // FIX: only update the label span, not the whole #etap (would nuke the arrow child)
   const etapLbl = document.querySelector('#etap .e-tap-label');
   if(esub)    esub.textContent    = D.entry.subtitle;
   if(etapLbl) etapLbl.textContent = D.entry.tapText;
@@ -211,8 +210,6 @@ function buildMQ(id){
   for(let i=0;i<10;i++) h+=`<div class="mq-item lq-lite"><span>${L[i%L.length]}</span></div>`;
   t.innerHTML=h+h;
 }
-// FIX: wrapped in try/catch — an uncaught throw here would halt all code below,
-// preventing the music player IIFE from ever running.
 try{ buildMQ('mq1'); }catch(e){}
 try{ buildMQ('mq2'); }catch(e){}
 function initGSAP(){
@@ -248,8 +245,6 @@ function switchTab(btn,id){
     const v=document.getElementById('tab-'+id); if(v) v.classList.add('on');
   },150);
 }
-// FIX: wrapped in try/catch — bare top-level FIZZ_DATA access would halt
-// everything below (uptime, title ticker, music IIFE) if data.js has any issue.
 let BORN = 0;
 try{ BORN = FIZZ_DATA.stats.bornDate; }catch(e){}
 function uptime(){
@@ -277,8 +272,6 @@ function tick(){
 }
 setTimeout(tick,2200);
 (function(){
-  // FIX: guard the whole music IIFE — if FIZZ_DATA.music is missing the player
-  // degrades gracefully instead of throwing and leaving the UI dead.
   const MC = (typeof FIZZ_DATA!=='undefined' && FIZZ_DATA.music) || {};
   const FOLDER   = MC.folder    || 'music/';
   const MAX      = MC.maxTracks || 10;
