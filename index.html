@@ -165,7 +165,7 @@ footer p{font-family:'Outfit',sans-serif;font-size:10px;text-transform:uppercase
 .trig:hover{color:var(--text);transform:translateY(-2px)}
 .trig.active{color:var(--text)}
 .tdot{width:5px;height:5px;border-radius:50%;background:var(--muted);transition:background .3s,box-shadow .3s;flex-shrink:0;position:relative;z-index:25}
-.trig.active .tdot{background:#1ed760;box-shadow:0 0 8px #1ed760;animation:pulse 1.5s infinite}
+.trig.active .tdot,.trig.playing .tdot{background:#1ed760;box-shadow:0 0 8px #1ed760;animation:pulse 1.5s infinite}
 .trig>span{position:relative;z-index:25}
 .panel{position:fixed;top:0;right:-420px;bottom:0;width:390px;z-index:400;display:flex;flex-direction:column;transition:right .48s var(--E);background:rgba(4,4,16,0.82);backdrop-filter:blur(38px) saturate(170%);-webkit-backdrop-filter:blur(38px) saturate(170%);border-left:1px solid rgba(255,255,255,0.08);box-shadow:-14px 0 60px rgba(0,0,0,0.75);overflow:hidden}
 .panel::before{content:'';position:absolute;left:0;top:0;bottom:0;width:1.5px;z-index:50;background:linear-gradient(180deg,transparent 0%,rgba(42,79,255,0.5) 20%,rgba(100,60,255,0.4) 50%,rgba(42,79,255,0.5) 80%,transparent 100%);filter:blur(0.5px)}
@@ -411,6 +411,7 @@ footer p{font-family:'Outfit',sans-serif;font-size:10px;text-transform:uppercase
         </div>
         <div class="mp-info">
           <div class="mp-title" id="mp-title">Loading…</div>
+          <div class="mp-idx"   id="mp-artist" style="margin-top:2px;font-size:9px">—</div>
           <div class="mp-idx"   id="mp-idx">—</div>
         </div>
         <div class="mp-prog-row">
