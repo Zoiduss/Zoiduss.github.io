@@ -185,6 +185,9 @@ function go(){
   document.body.classList.add('loaded');
   initGSAP();
   initScrollSpy();
+  // Attempt music playback inside this user gesture.
+  // window.mpStartPlay is set by the music player IIFE below.
+  if (typeof window.mpStartPlay === 'function') window.mpStartPlay();
 }
 function initScrollSpy(){
   const navLinks=document.querySelectorAll('.pill-a[data-section]');
@@ -328,17 +331,22 @@ setTimeout(tick,2200);
   // ══════════════════════════════════════════════════════════════════════════
   function startPlay() {
     initWebAudio();
-    var resumeP = (audioCtx && audioCtx.state === 'suspended')
-      ? audioCtx.resume()
-      : Promise.resolve();
-
-    return resumeP.then(function () {
-      return audio.play();
-    }).then(function () {
+    // Resume AudioContext fire-and-forget — must NOT block audio.play()
+    // because waiting inside .then() takes us outside the user-gesture window.
+    if (audioCtx && audioCtx.state === 'suspended') {
+      audioCtx.resume().catch(function() {});
+    }
+    // Call play() synchronously while we are still inside the user gesture.
+    var p = audio.play();
+    if (p && typeof p.then === 'function') {
+      p.then(function () {
+        if (audioReady && !rafId) drawVis();
+      }).catch(function (e) {
+        console.warn('[player] play() blocked:', e && e.name);
+      });
+    } else {
       if (audioReady && !rafId) drawVis();
-    }).catch(function (e) {
-      console.warn('[player] play() blocked:', e && e.name);
-    });
+    }
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -416,15 +424,20 @@ setTimeout(tick,2200);
   window.mpTogglePlay = mpTogglePlay;
   window.mpPrev       = mpPrev;
   window.mpNext       = mpNext;
+  window.mpStartPlay  = startPlay;
   window.loadTrack    = function (idx, p) { loadTrack(idx, !!p); };
 
   // ══════════════════════════════════════════════════════════════════════════
   // 5.  AUDIO EVENTS
   // ══════════════════════════════════════════════════════════════════════════
-  audio.addEventListener('play',       function () { isPlaying = true;  syncUI(); });
-  audio.addEventListener('pause',      function () { isPlaying = false; syncUI(); });
-  audio.addEventListener('ended',      function () { mpNext(); });
-  audio.addEventListener('timeupdate', updateProgress);
+  audio.addEventListener('play',         function () { isPlaying = true;  syncUI(); });
+  audio.addEventListener('pause',        function () { isPlaying = false; syncUI(); });
+  audio.addEventListener('ended',        function () { mpNext(); });
+  audio.addEventListener('timeupdate',   updateProgress);
+  audio.addEventListener('loadedmetadata', function () {
+    var durEl = document.getElementById('mp-dur');
+    if (durEl) durEl.textContent = fmt(audio.duration);
+  });
 
   function syncUI() {
     var playPath  = '<path d="M8 5v14l11-7z"/>';
@@ -550,15 +563,15 @@ setTimeout(tick,2200);
   }
 
   // ══════════════════════════════════════════════════════════════════════════
-  // 8.  ENTRY CLICK  → attempt autoplay on the first user gesture
-  //     NOT async / NOT awaited — calling startPlay() synchronously keeps
-  //     the call inside the user-gesture trust window every browser needs.
+  // 8.  ENTRY CLICK  → music is started by go() via window.mpStartPlay
+  //     The listener below is a belt-and-suspenders fallback for edge cases.
   // ══════════════════════════════════════════════════════════════════════════
   var enterEl = document.getElementById('enter');
   if (enterEl) {
     enterEl.addEventListener('click', function () {
-      if (queue.length) startPlay();
-      // startPlay() catches its own errors — nothing further needed here
+      // go() already calls startPlay(); this catches any race where it fires
+      // before window.mpStartPlay was assigned.
+      if (!isPlaying && queue.length) startPlay();
     });
   }
 
