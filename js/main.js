@@ -288,7 +288,7 @@ setTimeout(tick,2200);
   // Wire entry click immediately so it is never missed
   document.getElementById('enter')?.addEventListener('click',()=>{
     if(queue.length){
-      setTimeout(()=>audio.play().catch(()=>{}),900);
+      audio.play().catch(()=>{}); // must stay synchronous inside user gesture — no setTimeout
     } else {
       pendingEntryPlay = true; // queue not ready yet; play once it is
     }
@@ -468,7 +468,7 @@ setTimeout(tick,2200);
       loadTrack(0,false);
       if(pendingEntryPlay){
         pendingEntryPlay=false;
-        setTimeout(()=>audio.play().catch(()=>{}),900);
+        audio.play().catch(()=>{}); // AudioContext was unlocked by the click — safe to call now
       }
     } else {
       ['mp-title','np-mini-title'].forEach(id=>{
