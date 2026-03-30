@@ -280,9 +280,18 @@ setTimeout(tick,2200);
   const TITLES   = MC.titles    || {};
   let queue=[], current=0, isPlaying=false;
   let audioCtx, analyser, srcNode, rafId;
+  let pendingEntryPlay = false;
   const audio  = document.getElementById('mp-audio');
   const vis    = document.getElementById('mp-vis');
   const visCtx = vis ? vis.getContext('2d') : null;
+  document.getElementById('enter')?.addEventListener('click',()=>{
+    if(queue.length){
+      setTimeout(()=>audio.play().catch(()=>{}),900);
+    } else {
+      pendingEntryPlay = true; 
+    }
+  });
+
   async function probeFile(candidates){
     for(const url of candidates){
       try{ const r=await fetch(url,{method:'HEAD'}); if(r.ok) return url; }catch{}
@@ -295,9 +304,19 @@ setTimeout(tick,2200);
     const [src, cover] = await Promise.all([probeFile(srcs), probeFile(cvrs)]);
     if(!src) return null;
     const title = TITLES[String(n)] || `Track ${n}`;
-    return {src, cover, title, n};
+    return {src, cover, title, artist:'', n};
   }
   async function buildQueue(){
+    if(Array.isArray(MC.tracks) && MC.tracks.length){
+      queue = MC.tracks.map((t,i)=>({
+        src:    t.src,
+        cover:  t.cover || null,
+        title:  t.title  || TITLES[String(i+1)] || `Track ${i+1}`,
+        artist: t.artist || '',
+        n:      i+1,
+      }));
+      return;
+    }
     const tasks=[];
     for(let i=1;i<=MAX;i++) tasks.push(probeTrack(i));
     const results=await Promise.all(tasks);
@@ -330,9 +349,10 @@ setTimeout(tick,2200);
     const el=id=>document.getElementById(id);
     const n=queue.length;
     if(el('mp-title'))      el('mp-title').textContent      = t.title;
+    if(el('mp-artist'))     el('mp-artist').textContent     = t.artist;
     if(el('mp-idx'))        el('mp-idx').textContent        = `${current+1} / ${n}`;
     if(el('np-mini-title')) el('np-mini-title').textContent = t.title;
-    if(el('np-mini-sub'))   el('np-mini-sub').textContent   = `Track ${t.n} of ${n}`;
+    if(el('np-mini-sub'))   el('np-mini-sub').textContent   = t.artist || `Track ${t.n} of ${n}`;
     renderQueue();
     if(autoplay) audio.play().catch(()=>{});
   }
@@ -392,7 +412,7 @@ setTimeout(tick,2200);
         <div class="mp-q-thumb">${cover}</div>
         <div class="mp-q-info">
           <div class="mp-q-name">${t.title}</div>
-          <div class="mp-q-num">Track ${t.n}</div>
+          <div class="mp-q-num">${t.artist || 'Track '+t.n}</div>
         </div>
         ${bars?`<div class="mp-q-bars">${bars}</div>`:''}
       </div>`;
@@ -437,9 +457,10 @@ setTimeout(tick,2200);
   buildQueue().then(()=>{
     if(queue.length){
       loadTrack(0,false);
-      document.getElementById('enter')?.addEventListener('click',()=>{
+      if(pendingEntryPlay){
+        pendingEntryPlay=false;
         setTimeout(()=>audio.play().catch(()=>{}),900);
-      });
+      }
     } else {
       ['mp-title','np-mini-title'].forEach(id=>{
         const e=document.getElementById(id); if(e) e.textContent='No tracks found';
