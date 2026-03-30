@@ -280,15 +280,17 @@ setTimeout(tick,2200);
   const TITLES   = MC.titles    || {};
   let queue=[], current=0, isPlaying=false;
   let audioCtx, analyser, srcNode, rafId;
-  let pendingEntryPlay = false;
+  let pendingEntryPlay = false; // fix race: user clicks entry before queue builds
   const audio  = document.getElementById('mp-audio');
   const vis    = document.getElementById('mp-vis');
   const visCtx = vis ? vis.getContext('2d') : null;
+
+  // Wire entry click immediately so it is never missed
   document.getElementById('enter')?.addEventListener('click',()=>{
     if(queue.length){
       setTimeout(()=>audio.play().catch(()=>{}),900);
     } else {
-      pendingEntryPlay = true; 
+      pendingEntryPlay = true; // queue not ready yet; play once it is
     }
   });
 
@@ -307,6 +309,7 @@ setTimeout(tick,2200);
     return {src, cover, title, artist:'', n};
   }
   async function buildQueue(){
+    // Use explicit track list if provided — no HTTP probing needed
     if(Array.isArray(MC.tracks) && MC.tracks.length){
       queue = MC.tracks.map((t,i)=>({
         src:    t.src,
@@ -317,6 +320,7 @@ setTimeout(tick,2200);
       }));
       return;
     }
+    // Fallback: probe files via HEAD requests
     const tasks=[];
     for(let i=1;i<=MAX;i++) tasks.push(probeTrack(i));
     const results=await Promise.all(tasks);
@@ -419,17 +423,22 @@ setTimeout(tick,2200);
     }).join('');
   }
   window.loadTrack=(idx,play)=>{ loadTrack(idx,play); };
+  let visDisabled = false;
   function startVis(){
-    if(!vis||!visCtx||!audio) return;
-    if(!audioCtx){
-      audioCtx=new (window.AudioContext||window.webkitAudioContext)();
-      analyser=audioCtx.createAnalyser(); analyser.fftSize=256;
-      srcNode=audioCtx.createMediaElementSource(audio);
-      srcNode.connect(analyser); analyser.connect(audioCtx.destination);
+    if(!vis||!visCtx||!audio||visDisabled) return;
+    try{
+      if(!audioCtx){
+        audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+        analyser=audioCtx.createAnalyser(); analyser.fftSize=256;
+        srcNode=audioCtx.createMediaElementSource(audio);
+        srcNode.connect(analyser); analyser.connect(audioCtx.destination);
+      }
+      if(audioCtx.state==='suspended') audioCtx.resume();
+      if(rafId) cancelAnimationFrame(rafId);
+      drawVis();
+    }catch(e){
+      visDisabled=true;
     }
-    if(audioCtx.state==='suspended') audioCtx.resume();
-    if(rafId) cancelAnimationFrame(rafId);
-    drawVis();
   }
   function drawVis(){
     if(!analyser||!vis||!visCtx) return;
