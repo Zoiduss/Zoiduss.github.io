@@ -272,209 +272,177 @@ function tick(){
 }
 setTimeout(tick,2200);
 (function(){
-  const MC = (typeof FIZZ_DATA!=='undefined' && FIZZ_DATA.music) || {};
-  const FOLDER   = MC.folder    || 'music/';
-  const MAX      = MC.maxTracks || 10;
-  const AUDIO_X  = MC.audioExts || ['mp3','ogg','wav'];
-  const COVER_X  = MC.coverExts || ['jpg','png','webp'];
-  const TITLES   = MC.titles    || {};
+  const MC      = (typeof FIZZ_DATA!=='undefined' && FIZZ_DATA.music) || {};
+  const FOLDER  = MC.folder    || 'music/';
+  const MAX     = MC.maxTracks || 10;
+  const AUDIO_X = MC.audioExts || ['mp3','ogg','wav'];
+  const COVER_X = MC.coverExts || ['jpg','png','webp'];
+  const TITLES  = MC.titles    || {};
+
   let queue=[], current=0, isPlaying=false;
-  let audioCtx, analyser, srcNode, rafId;
-  let pendingEntryPlay = false; // fix race: user clicks entry before queue builds
+  // WebAudio — created once, on first user gesture
+  let audioCtx=null, analyser=null, srcNode=null, vizReady=false, rafId=null;
+
   const audio  = document.getElementById('mp-audio');
   const vis    = document.getElementById('mp-vis');
   const visCtx = vis ? vis.getContext('2d') : null;
 
-  // Wire entry click: init AudioContext + play inside the user gesture (nihi pattern).
-  document.getElementById('enter')?.addEventListener('click', async ()=>{
-    if(queue.length){
-      // Init visualizer here — inside the gesture — so AudioContext is created while
-      // the browser still considers this a trusted user interaction.
-      startVis();
-      if(audioCtx && audioCtx.state==='suspended') await audioCtx.resume().catch(()=>{});
-      audio.play().catch(()=>{});
-    } else {
-      // Queue not ready yet — flag it; buildQueue().then() will play once loaded.
-      pendingEntryPlay = true;
+  // ── AUDIO CONTEXT INIT (call once, inside a user gesture) ──────────────
+  function initAudio(){
+    if(vizReady) return true;
+    try{
+      audioCtx  = new (window.AudioContext||window.webkitAudioContext)();
+      analyser  = audioCtx.createAnalyser();
+      analyser.fftSize = 256;
+      srcNode   = audioCtx.createMediaElementSource(audio);
+      srcNode.connect(analyser);
+      analyser.connect(audioCtx.destination);
+      vizReady  = true;
+      return true;
+    }catch(e){
+      console.warn('AudioContext init failed:', e);
+      // Audio will still play through default output — visualizer just won't work
+      return false;
     }
-  });
+  }
 
-  async function probeFile(candidates){
-    for(const url of candidates){
-      try{ const r=await fetch(url,{method:'HEAD'}); if(r.ok) return url; }catch{}
-    }
-    return null;
+  // ── CORE PLAY (always called inside or chained from a user gesture) ────
+  async function doPlay(){
+    initAudio();
+    if(audioCtx && audioCtx.state==='suspended') await audioCtx.resume().catch(()=>{});
+    await audio.play();
+    if(vizReady) drawVis();
   }
-  async function probeTrack(n){
-    const srcs = AUDIO_X.map(e=>`${FOLDER}track${n}.${e}`);
-    const cvrs = COVER_X.map(e=>`${FOLDER}cover${n}.${e}`);
-    const [src, cover] = await Promise.all([probeFile(srcs), probeFile(cvrs)]);
-    if(!src) return null;
-    const title = TITLES[String(n)] || `Track ${n}`;
-    return {src, cover, title, artist:'', n};
-  }
-  async function buildQueue(){
-    // Use explicit track list if provided — no HTTP probing needed
-    if(Array.isArray(MC.tracks) && MC.tracks.length){
-      queue = MC.tracks.map((t,i)=>({
-        src:    t.src,
-        cover:  t.cover || null,
-        title:  t.title  || TITLES[String(i+1)] || `Track ${i+1}`,
-        artist: t.artist || '',
-        n:      i+1,
-      }));
-      return;
-    }
-    // Fallback: probe files via HEAD requests
-    const tasks=[];
-    for(let i=1;i<=MAX;i++) tasks.push(probeTrack(i));
-    const results=await Promise.all(tasks);
-    for(const t of results){ if(!t) break; queue.push(t); }
-  }
+
+  // ── LOAD TRACK ──────────────────────────────────────────────────────────
+  // IMPORTANT: never call audio.load() after the AudioContext has taken
+  // ownership — it breaks the MediaElementSource chain and wipes duration.
   function loadTrack(idx, autoplay){
     if(!queue.length) return;
-    current=(idx+queue.length)%queue.length;
-    const t=queue[current];
-    audio.src=t.src;
-    audio.load(); // force browser to fetch the new src — required in some browsers after src reassignment
-    audio.volume=(document.getElementById('mp-vol')?.value??80)/100;
-    const img=document.getElementById('mp-cover-img');
-    const ph=document.getElementById('mp-cover-ph');
-    const bg=document.getElementById('mp-cover-bg');
-    if(img&&ph){
+    current = (idx+queue.length) % queue.length;
+    const t = queue[current];
+
+    audio.src = t.src;
+    // Only call load() before the AudioContext exists — once srcNode is connected,
+    // setting audio.src is enough; play() will fetch the new resource automatically.
+    if(!vizReady) audio.load();
+
+    audio.volume = (document.getElementById('mp-vol')?.value ?? 80) / 100;
+
+    // ── update cover ──
+    const img = document.getElementById('mp-cover-img');
+    const ph  = document.getElementById('mp-cover-ph');
+    const bg  = document.getElementById('mp-cover-bg');
+    if(img && ph){
       if(t.cover){
-        img.src=t.cover; img.style.display='block'; ph.style.display='none';
-        if(bg) bg.style.backgroundImage=`url('${t.cover}')`;
+        img.src = t.cover; img.style.display='block'; ph.style.display='none';
+        if(bg) bg.style.backgroundImage = `url('${t.cover}')`;
       } else {
         img.style.display='none'; ph.style.display='flex';
-        if(bg) bg.style.backgroundImage='';
+        if(bg) bg.style.backgroundImage = '';
       }
     }
-    const mc=document.getElementById('np-mini-cover');
-    if(mc){
-      mc.innerHTML=t.cover
-        ?`<img src="${t.cover}" style="width:100%;height:100%;object-fit:cover;border-radius:10px">`
-        :`<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" opacity=".35"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>`;
-    }
-    const el=id=>document.getElementById(id);
-    const n=queue.length;
+    const mc = document.getElementById('np-mini-cover');
+    if(mc) mc.innerHTML = t.cover
+      ? `<img src="${t.cover}" style="width:100%;height:100%;object-fit:cover;border-radius:10px">`
+      : `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" opacity=".35"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>`;
+
+    // ── update text UI ──
+    const el  = id => document.getElementById(id);
+    const n   = queue.length;
     if(el('mp-title'))      el('mp-title').textContent      = t.title;
     if(el('mp-artist'))     el('mp-artist').textContent     = t.artist;
     if(el('mp-idx'))        el('mp-idx').textContent        = `${current+1} / ${n}`;
     if(el('np-mini-title')) el('np-mini-title').textContent = t.title;
     if(el('np-mini-sub'))   el('np-mini-sub').textContent   = t.artist || `Track ${t.n} of ${n}`;
+
     renderQueue();
-    if(autoplay){
-      if(audioCtx && audioCtx.state==='suspended') audioCtx.resume().catch(()=>{});
-      audio.play().catch(e=>console.error('loadTrack autoplay failed:', e));
-    }
+    if(autoplay) doPlay().catch(e=>console.error('autoplay failed:', e));
   }
+
+  // ── PUBLIC CONTROLS ────────────────────────────────────────────────────
   async function mpTogglePlay(){
     if(!queue.length) return;
-    if(audio.error){ loadTrack(current, false); return; }
     if(audio.paused){
-      // Init AudioContext HERE inside the user gesture — not from an event listener.
-      // This matches the nihi pattern: init visualizer BEFORE calling play().
-      startVis();
-      if(audioCtx && audioCtx.state==='suspended'){
-        await audioCtx.resume().catch(()=>{});
-      }
-      try{
-        await audio.play();
-      } catch(e){
-        // play() rejected — reload track and retry once
-        loadTrack(current, false);
-        await audio.play().catch(e2=>console.error('Playback failed:', e2));
-      }
+      await doPlay().catch(e=>console.error('togglePlay failed:', e));
     } else {
       audio.pause();
     }
   }
-  function mpPrev(){ loadTrack(current-1,true); }
-  function mpNext(){ loadTrack(current+1,true); }
-  window.mpTogglePlay=mpTogglePlay;
-  window.mpPrev=mpPrev;
-  window.mpNext=mpNext;
-  // 'play' event: just sync UI — AudioContext is already set up by mpTogglePlay above.
-  audio.addEventListener('play',  ()=>{ isPlaying=true;  syncUI(); });
-  audio.addEventListener('pause', ()=>{ isPlaying=false; syncUI(); });
-  audio.addEventListener('ended', ()=>{ mpNext(); });
-  audio.addEventListener('timeupdate', updateProgress);
+  function mpPrev(){ loadTrack(current-1, true); }
+  function mpNext(){ loadTrack(current+1, true); }
+  window.mpTogglePlay = mpTogglePlay;
+  window.mpPrev = mpPrev;
+  window.mpNext = mpNext;
+  window.loadTrack = (idx, play) => loadTrack(idx, play);
+
+  // ── AUDIO EVENTS ───────────────────────────────────────────────────────
+  audio.addEventListener('play',        ()=>{ isPlaying=true;  syncUI(); });
+  audio.addEventListener('pause',       ()=>{ isPlaying=false; syncUI(); });
+  audio.addEventListener('ended',       ()=>{ mpNext(); });
+  audio.addEventListener('timeupdate',  updateProgress);
+
   function syncUI(){
-    const iconPath=isPlaying
-      ?'<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>'
-      :'<path d="M8 5v14l11-7z"/>';
+    const iconPath = isPlaying
+      ? '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>'
+      : '<path d="M8 5v14l11-7z"/>';
     ['mp-play-icon','np-mini-icon'].forEach(id=>{
       const el=document.getElementById(id); if(el) el.innerHTML=iconPath;
     });
     const dot=document.getElementById('np-dot');
-    if(dot) dot.style.animation=isPlaying?'pulse 2s infinite':'none';
+    if(dot) dot.style.animation = isPlaying ? 'pulse 2s infinite' : 'none';
+    renderQueue(); // refresh bars in queue list
   }
+
   function updateProgress(){
     if(!audio.duration) return;
-    const pct=(audio.currentTime/audio.duration)*100;
-    const fill=document.getElementById('mp-prog-fill');
-    const mini=document.getElementById('np-mini-fill');
-    const seek=document.getElementById('mp-seek');
-    if(fill) fill.style.width=pct+'%';
-    if(mini) mini.style.width=pct+'%';
-    if(seek) seek.value=pct;
-    const cur=document.getElementById('mp-cur');
-    const dur=document.getElementById('mp-dur');
-    if(cur) cur.textContent=fmt(audio.currentTime);
-    if(dur) dur.textContent=fmt(audio.duration);
+    const pct = (audio.currentTime / audio.duration) * 100;
+    const fill = document.getElementById('mp-prog-fill');
+    const mini = document.getElementById('np-mini-fill');
+    const seek = document.getElementById('mp-seek');
+    if(fill) fill.style.width = pct+'%';
+    if(mini) mini.style.width = pct+'%';
+    if(seek) seek.value = pct;
+    const cur = document.getElementById('mp-cur');
+    const dur = document.getElementById('mp-dur');
+    if(cur) cur.textContent = fmt(audio.currentTime);
+    if(dur) dur.textContent = fmt(audio.duration);
   }
-  function fmt(s){ if(!s||isNaN(s)) return '0:00'; const m=Math.floor(s/60),sec=Math.floor(s%60); return m+':'+String(sec).padStart(2,'0'); }
-  document.getElementById('mp-seek')?.addEventListener('input',function(){
-    if(audio.duration) audio.currentTime=(this.value/100)*audio.duration;
+
+  function fmt(s){
+    if(!s||isNaN(s)) return '0:00';
+    const m=Math.floor(s/60), sec=Math.floor(s%60);
+    return m+':'+String(sec).padStart(2,'0');
+  }
+
+  document.getElementById('mp-seek')?.addEventListener('input', function(){
+    if(audio.duration) audio.currentTime = (this.value/100)*audio.duration;
   });
-  document.getElementById('mp-vol')?.addEventListener('input',function(){
-    audio.volume=this.value/100;
+  document.getElementById('mp-vol')?.addEventListener('input', function(){
+    audio.volume = this.value/100;
   });
+
+  // ── QUEUE RENDER ───────────────────────────────────────────────────────
   function renderQueue(){
     const el=document.getElementById('mp-queue'); if(!el) return;
     el.innerHTML=queue.map((t,i)=>{
-      const active=i===current?'active':'';
-      const cover=t.cover?`<img src="${t.cover}" alt="">`:String(i+1);
-      const bars=active&&isPlaying
-        ?['.4s','.6s','.5s'].map(d=>`<div class="mp-q-bar" style="--d:${d}"></div>`).join('')
-        :'';
+      const active = i===current ? 'active' : '';
+      const cover  = t.cover ? `<img src="${t.cover}" alt="">` : String(i+1);
+      const bars   = active && isPlaying
+        ? ['.4s','.6s','.5s'].map(d=>`<div class="mp-q-bar" style="--d:${d}"></div>`).join('')
+        : '';
       return `<div class="mp-q-item ${active}" onclick="loadTrack(${i},true)">
         <div class="mp-q-thumb">${cover}</div>
         <div class="mp-q-info">
           <div class="mp-q-name">${t.title}</div>
-          <div class="mp-q-num">${t.artist || 'Track '+t.n}</div>
+          <div class="mp-q-num">${t.artist||'Track '+t.n}</div>
         </div>
         ${bars?`<div class="mp-q-bars">${bars}</div>`:''}
       </div>`;
     }).join('');
   }
-  window.loadTrack=(idx,play)=>{ loadTrack(idx,play); };
-  let visDisabled = false;
-  function startVis(){
-    if(!vis||!visCtx||!audio||visDisabled) return;
-    try{
-      if(!audioCtx){
-        audioCtx=new (window.AudioContext||window.webkitAudioContext)();
-        analyser=audioCtx.createAnalyser(); analyser.fftSize=256;
-        try{
-          srcNode=audioCtx.createMediaElementSource(audio);
-          srcNode.connect(analyser); analyser.connect(audioCtx.destination);
-        }catch(chainErr){
-          // createMediaElementSource failed (e.g. CORS). Close the context so the audio
-          // element keeps its default output — without this, audio routes to a broken graph.
-          try{ audioCtx.close(); }catch{}
-          audioCtx=null; analyser=null; srcNode=null;
-          visDisabled=true; return;
-        }
-      }
-      if(audioCtx.state==='suspended') audioCtx.resume().catch(()=>{});
-      if(rafId) cancelAnimationFrame(rafId);
-      drawVis();
-    }catch(e){
-      visDisabled=true;
-    }
-  }
+
+  // ── VISUALIZER ─────────────────────────────────────────────────────────
   function drawVis(){
     if(!analyser||!vis||!visCtx) return;
     const W=vis.offsetWidth*devicePixelRatio, H=vis.offsetHeight*devicePixelRatio;
@@ -495,19 +463,56 @@ setTimeout(tick,2200);
       const r=Math.min(barW/2,3*devicePixelRatio);
       visCtx.beginPath(); visCtx.roundRect(x,y,barW,h,[r,r,0,0]); visCtx.fill();
     }
-    if(isPlaying) rafId=requestAnimationFrame(drawVis);
-    else{ const flat=data.every(v=>v===0); if(!flat) rafId=requestAnimationFrame(drawVis); }
+    rafId = isPlaying
+      ? requestAnimationFrame(drawVis)
+      : data.every(v=>v===0) ? null : requestAnimationFrame(drawVis);
   }
+
+  // ── ENTRY CLICK ────────────────────────────────────────────────────────
+  let entryPlayed = false;
+  document.getElementById('enter')?.addEventListener('click', async ()=>{
+    if(entryPlayed) return;
+    entryPlayed = true;
+    if(queue.length){
+      await doPlay().catch(()=>{ entryPlayed=false; });
+    }
+    // If queue isn't ready yet the audio.play() call below in buildQueue handles it
+  });
+
+  // ── QUEUE BUILD ────────────────────────────────────────────────────────
+  async function probeFile(candidates){
+    for(const url of candidates){
+      try{ const r=await fetch(url,{method:'HEAD'}); if(r.ok) return url; }catch{}
+    }
+    return null;
+  }
+  async function probeTrack(n){
+    const srcs=AUDIO_X.map(e=>`${FOLDER}track${n}.${e}`);
+    const cvrs=COVER_X.map(e=>`${FOLDER}cover${n}.${e}`);
+    const [src,cover]=await Promise.all([probeFile(srcs),probeFile(cvrs)]);
+    if(!src) return null;
+    return {src,cover,title:TITLES[String(n)]||`Track ${n}`,artist:'',n};
+  }
+  async function buildQueue(){
+    if(Array.isArray(MC.tracks)&&MC.tracks.length){
+      queue=MC.tracks.map((t,i)=>({
+        src:   t.src,
+        cover: t.cover||null,
+        title: t.title||TITLES[String(i+1)]||`Track ${i+1}`,
+        artist:t.artist||'',
+        n:     i+1,
+      }));
+      return;
+    }
+    const tasks=[];
+    for(let i=1;i<=MAX;i++) tasks.push(probeTrack(i));
+    const results=await Promise.all(tasks);
+    for(const t of results){ if(!t) break; queue.push(t); }
+  }
+
   buildQueue().then(()=>{
     if(queue.length){
-      loadTrack(0,false);
-      if(pendingEntryPlay){
-        pendingEntryPlay=false;
-        // AudioContext was already unlocked by the entry click gesture — safe to call now.
-        startVis();
-        if(audioCtx && audioCtx.state==='suspended') audioCtx.resume().catch(()=>{});
-        audio.play().catch(()=>{});
-      }
+      loadTrack(0, false);
     } else {
       ['mp-title','np-mini-title'].forEach(id=>{
         const e=document.getElementById(id); if(e) e.textContent='No tracks found';
