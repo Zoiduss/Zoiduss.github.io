@@ -285,13 +285,19 @@ setTimeout(tick,2200);
   const vis    = document.getElementById('mp-vis');
   const visCtx = vis ? vis.getContext('2d') : null;
 
-  // Wire entry click immediately so it is never missed
+  // Wire entry click: unlock AudioContext (needed by autoplay policy) but don't auto-start
+  // music — user should press play explicitly so the panel button state is never confusing.
   document.getElementById('enter')?.addEventListener('click',()=>{
-    if(queue.length){
-      audio.play().catch(()=>{}); // must stay synchronous inside user gesture — no setTimeout
-    } else {
-      pendingEntryPlay = true; // queue not ready yet; play once it is
-    }
+    pendingEntryPlay = false; // don't auto-play
+    // Warm up AudioContext inside the user gesture so future play() calls are never blocked
+    try{
+      if(!audioCtx){
+        const tmpCtx=new (window.AudioContext||window.webkitAudioContext)();
+        tmpCtx.resume().then(()=>tmpCtx.close()).catch(()=>{});
+      } else if(audioCtx.state==='suspended'){
+        audioCtx.resume().catch(()=>{});
+      }
+    }catch(e){}
   });
 
   async function probeFile(candidates){
@@ -331,6 +337,7 @@ setTimeout(tick,2200);
     current=(idx+queue.length)%queue.length;
     const t=queue[current];
     audio.src=t.src;
+    audio.load(); // force browser to fetch the new src — required in some browsers after src reassignment
     audio.volume=(document.getElementById('mp-vol')?.value??80)/100;
     const img=document.getElementById('mp-cover-img');
     const ph=document.getElementById('mp-cover-ph');
@@ -362,7 +369,15 @@ setTimeout(tick,2200);
   }
   function mpTogglePlay(){
     if(!queue.length) return;
-    if(audio.paused){ audio.play().catch(()=>{}); } else { audio.pause(); }
+    // If audio element hit an error, reset by reloading the current track
+    if(audio.error){ loadTrack(current, true); return; }
+    if(audio.paused){
+      // Resume AudioContext first if it was suspended (required after page focus loss)
+      if(audioCtx && audioCtx.state==='suspended') audioCtx.resume().catch(()=>{});
+      audio.play().catch(()=>{ loadTrack(current, true); });
+    } else {
+      audio.pause();
+    }
   }
   function mpPrev(){ loadTrack(current-1,true); }
   function mpNext(){ loadTrack(current+1,true); }
@@ -430,10 +445,18 @@ setTimeout(tick,2200);
       if(!audioCtx){
         audioCtx=new (window.AudioContext||window.webkitAudioContext)();
         analyser=audioCtx.createAnalyser(); analyser.fftSize=256;
-        srcNode=audioCtx.createMediaElementSource(audio);
-        srcNode.connect(analyser); analyser.connect(audioCtx.destination);
+        try{
+          srcNode=audioCtx.createMediaElementSource(audio);
+          srcNode.connect(analyser); analyser.connect(audioCtx.destination);
+        }catch(chainErr){
+          // createMediaElementSource failed (e.g. CORS). Close the context so the audio
+          // element keeps its default output — without this, audio routes to a broken graph.
+          try{ audioCtx.close(); }catch{}
+          audioCtx=null; analyser=null; srcNode=null;
+          visDisabled=true; return;
+        }
       }
-      if(audioCtx.state==='suspended') audioCtx.resume();
+      if(audioCtx.state==='suspended') audioCtx.resume().catch(()=>{});
       if(rafId) cancelAnimationFrame(rafId);
       drawVis();
     }catch(e){
@@ -466,10 +489,6 @@ setTimeout(tick,2200);
   buildQueue().then(()=>{
     if(queue.length){
       loadTrack(0,false);
-      if(pendingEntryPlay){
-        pendingEntryPlay=false;
-        audio.play().catch(()=>{}); // AudioContext was unlocked by the click — safe to call now
-      }
     } else {
       ['mp-title','np-mini-title'].forEach(id=>{
         const e=document.getElementById(id); if(e) e.textContent='No tracks found';
