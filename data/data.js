@@ -162,7 +162,7 @@ const FIZZ_DATA = {
   stats: {
     // "Online since" live counter in the contact section.
     // Month is 0-indexed (0 = January, 2 = March).
-    bornDate: new Date(2026, 24, 3),   // ,
+    bornDate: new Date(2026, 2, 27),   // March 27, 2026 (month is 0-indexed)
   },
 
   // ── FOOTER ────────────────────────────────────────────────────
