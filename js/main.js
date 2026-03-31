@@ -185,8 +185,6 @@ function go(){
   document.body.classList.add('loaded');
   initGSAP();
   initScrollSpy();
-  // Attempt music playback inside this user gesture.
-  // window.mpStartPlay is set by the music player IIFE below.
   if (typeof window.mpStartPlay === 'function') window.mpStartPlay();
 }
 function initScrollSpy(){
@@ -275,39 +273,25 @@ function tick(){
   }
 }
 setTimeout(tick,2200);
-
-// ── MUSIC PLAYER ────────────────────────────────────────────────────────────
 (function () {
-
-  // ── Config ────────────────────────────────────────────────────────────────
   var MC     = (typeof FIZZ_DATA !== 'undefined' && FIZZ_DATA.music) || {};
   var FOLDER = MC.folder    || 'music/';
   var MAX    = MC.maxTracks || 50;
   var AX     = MC.audioExts || ['mp3', 'ogg', 'wav'];
   var CX     = MC.coverExts || ['jpg', 'jpeg', 'png', 'webp'];
   var TITLES = MC.titles    || {};
-
-  // ── State ─────────────────────────────────────────────────────────────────
   var queue     = [];
   var curIdx    = 0;
   var isPlaying = false;
-
-  // ── Web Audio (created once, inside a user-gesture) ───────────────────────
   var audioCtx  = null;
   var analyser  = null;
   var srcNode   = null;
   var audioReady = false;
   var rafId      = null;
-
-  // ── DOM refs ──────────────────────────────────────────────────────────────
   var audio  = document.getElementById('mp-audio');
   var vis    = document.getElementById('mp-vis');
   var visCtx = vis ? vis.getContext('2d') : null;
   if (!audio) return; // nothing to attach to
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // 1.  WEB AUDIO — initialise once, inside a real user gesture
-  // ══════════════════════════════════════════════════════════════════════════
   function initWebAudio() {
     if (audioReady) return;
     try {
@@ -321,22 +305,13 @@ setTimeout(tick,2200);
       audioReady = true;
     } catch (e) {
       console.warn('[player] AudioContext failed:', e);
-      // audio still plays through default output; visualiser just won't show
     }
   }
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // 2.  CORE PLAY  — always call synchronously from a user gesture.
-  //     Returns a Promise so callers can .catch() if needed.
-  // ══════════════════════════════════════════════════════════════════════════
   function startPlay() {
     initWebAudio();
-    // Resume AudioContext fire-and-forget — must NOT block audio.play()
-    // because waiting inside .then() takes us outside the user-gesture window.
     if (audioCtx && audioCtx.state === 'suspended') {
       audioCtx.resume().catch(function() {});
     }
-    // Call play() synchronously while we are still inside the user gesture.
     var p = audio.play();
     if (p && typeof p.then === 'function') {
       p.then(function () {
@@ -348,30 +323,14 @@ setTimeout(tick,2200);
       if (audioReady && !rafId) drawVis();
     }
   }
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // 3.  LOAD TRACK
-  //     CRITICAL: do NOT call audio.load() after createMediaElementSource()
-  //     has taken ownership — it severs the Web Audio routing in Safari and
-  //     causes race conditions in Chrome.  Setting audio.src is sufficient;
-  //     the browser's "update source" algorithm handles the rest, and play()
-  //     will fetch the new file automatically.
-  // ══════════════════════════════════════════════════════════════════════════
   function loadTrack(idx, autoplay) {
     if (!queue.length) return;
     curIdx = ((idx % queue.length) + queue.length) % queue.length;
     var t  = queue[curIdx];
-
     audio.src = t.src;
-    // Only call load() before the AudioContext has been set up — after that,
-    // load() is forbidden (see note above).
     if (!audioReady) audio.load();
-
-    // Restore volume from slider
     var volEl = document.getElementById('mp-vol');
-    audio.volume = volEl ? (volEl.value / 100) : 0.8;
-
-    // ── Cover art ───────────────────────────────────────────────
+    audio.volume = volEl ? (volEl.value / 100) : 0.3;
     var img = document.getElementById('mp-cover-img');
     var ph  = document.getElementById('mp-cover-ph');
     var bg  = document.getElementById('mp-cover-bg');
@@ -393,8 +352,6 @@ setTimeout(tick,2200);
         ? '<img src="' + t.cover + '" style="width:100%;height:100%;object-fit:cover;border-radius:10px">'
         : '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" opacity=".35"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>';
     }
-
-    // ── Text ────────────────────────────────────────────────────
     var n  = queue.length;
     var el = function (id) { return document.getElementById(id); };
     if (el('mp-title'))      el('mp-title').textContent      = t.title;
@@ -406,10 +363,6 @@ setTimeout(tick,2200);
     renderQueue();
     if (autoplay) startPlay();
   }
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // 4.  PUBLIC CONTROLS  (exposed on window for onclick= attributes)
-  // ══════════════════════════════════════════════════════════════════════════
   function mpTogglePlay() {
     if (!queue.length) return;
     if (audio.paused) {
@@ -426,10 +379,6 @@ setTimeout(tick,2200);
   window.mpNext       = mpNext;
   window.mpStartPlay  = startPlay;
   window.loadTrack    = function (idx, p) { loadTrack(idx, !!p); };
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // 5.  AUDIO EVENTS
-  // ══════════════════════════════════════════════════════════════════════════
   audio.addEventListener('play',         function () { isPlaying = true;  syncUI(); });
   audio.addEventListener('pause',        function () { isPlaying = false; syncUI(); });
   audio.addEventListener('ended',        function () { mpNext(); });
@@ -438,26 +387,20 @@ setTimeout(tick,2200);
     var durEl = document.getElementById('mp-dur');
     if (durEl) durEl.textContent = fmt(audio.duration);
   });
-
   function syncUI() {
     var playPath  = '<path d="M8 5v14l11-7z"/>';
     var pausePath = '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>';
     var iconPath  = isPlaying ? pausePath : playPath;
-
     ['mp-play-icon', 'np-mini-icon'].forEach(function (id) {
       var el = document.getElementById(id);
       if (el) el.innerHTML = iconPath;
     });
-
     var dot = document.getElementById('np-dot');
     if (dot) dot.style.animation = isPlaying ? 'pulse 2s infinite' : 'none';
-
     var trig = document.getElementById('trig');
     if (trig) trig.classList.toggle('playing', isPlaying);
-
     renderQueue();
   }
-
   function updateProgress() {
     if (!audio.duration) return;
     var pct  = (audio.currentTime / audio.duration) * 100;
@@ -472,14 +415,12 @@ setTimeout(tick,2200);
     if (curEl) curEl.textContent = fmt(audio.currentTime);
     if (durEl) durEl.textContent = fmt(audio.duration);
   }
-
   function fmt(s) {
     if (!s || isNaN(s)) return '0:00';
     var m   = Math.floor(s / 60);
     var sec = Math.floor(s % 60);
     return m + ':' + (sec < 10 ? '0' : '') + sec;
   }
-
   var seekEl = document.getElementById('mp-seek');
   if (seekEl) {
     seekEl.addEventListener('input', function () {
@@ -492,10 +433,6 @@ setTimeout(tick,2200);
       audio.volume = this.value / 100;
     });
   }
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // 6.  QUEUE RENDER
-  // ══════════════════════════════════════════════════════════════════════════
   function renderQueue() {
     var el = document.getElementById('mp-queue');
     if (!el) return;
@@ -517,28 +454,19 @@ setTimeout(tick,2200);
         + '</div>';
     }).join('');
   }
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // 7.  VISUALISER  (canvas 2-D bar graph)
-  // ══════════════════════════════════════════════════════════════════════════
   function drawVis() {
-    // If we can't draw yet, null rafId so the next startPlay() call retries.
     if (!analyser || !vis || !visCtx) { rafId = null; return; }
-
     var dpr = window.devicePixelRatio || 1;
     var W   = vis.offsetWidth  * dpr;
     var H   = vis.offsetHeight * dpr;
     if (vis.width !== W || vis.height !== H) { vis.width = W; vis.height = H; }
-
     var data = new Uint8Array(analyser.frequencyBinCount);
     analyser.getByteFrequencyData(data);
     visCtx.clearRect(0, 0, W, H);
-
     var bars = Math.min(60, data.length);
     var gap  = Math.max(1, Math.ceil(W * 0.008));
     var barW = (W - gap * (bars - 1)) / bars;
     var maxH = H * 0.88;
-
     for (var i = 0; i < bars; i++) {
       var val  = data[Math.floor(i * data.length / bars)] / 255;
       var h    = Math.max(2 * dpr, val * maxH);
@@ -550,7 +478,6 @@ setTimeout(tick,2200);
       visCtx.fillStyle = grad;
       var r = Math.min(barW / 2, 3 * dpr);
       visCtx.beginPath();
-      // roundRect is not available in all browsers — fall back to rect
       if (typeof visCtx.roundRect === 'function') {
         visCtx.roundRect(x, y, barW, h, [r, r, 0, 0]);
       } else {
@@ -558,26 +485,14 @@ setTimeout(tick,2200);
       }
       visCtx.fill();
     }
-
     rafId = requestAnimationFrame(drawVis);
   }
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // 8.  ENTRY CLICK  → music is started by go() via window.mpStartPlay
-  //     The listener below is a belt-and-suspenders fallback for edge cases.
-  // ══════════════════════════════════════════════════════════════════════════
   var enterEl = document.getElementById('enter');
   if (enterEl) {
     enterEl.addEventListener('click', function () {
-      // go() already calls startPlay(); this catches any race where it fires
-      // before window.mpStartPlay was assigned.
       if (!isPlaying && queue.length) startPlay();
     });
   }
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // 9.  BUILD QUEUE  then prime the first track
-  // ══════════════════════════════════════════════════════════════════════════
   function probeFile(candidates) {
     var i = 0;
     function next() {
@@ -589,7 +504,6 @@ setTimeout(tick,2200);
     }
     return next();
   }
-
   function probeTrack(n) {
     var srcs = AX.map(function (e) { return FOLDER + 'track' + n + '.' + e; });
     var cvrs = CX.map(function (e) { return FOLDER + 'cover' + n + '.' + e; });
@@ -600,7 +514,6 @@ setTimeout(tick,2200);
       return { src: src, cover: cover || null, title: TITLES[String(n)] || 'Track ' + n, artist: '', n: n };
     });
   }
-
   function buildQueue() {
     if (Array.isArray(MC.tracks) && MC.tracks.length) {
       queue = MC.tracks.map(function (t, i) {
@@ -614,7 +527,6 @@ setTimeout(tick,2200);
       });
       return Promise.resolve();
     }
-    // Auto-probe fallback (sequential so we stop at the first gap)
     var result = [];
     function probe(n) {
       if (n > MAX) return Promise.resolve();
@@ -626,7 +538,6 @@ setTimeout(tick,2200);
     }
     return probe(1).then(function () { queue = result; });
   }
-
   buildQueue().then(function () {
     if (queue.length) {
       loadTrack(0, false);
@@ -639,5 +550,4 @@ setTimeout(tick,2200);
       if (sub) sub.textContent = 'Add track1.mp3 to music/ folder';
     }
   });
-
 }());
