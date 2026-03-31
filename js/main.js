@@ -1,4 +1,3 @@
-// ── Custom cursor ────────────────────────────────────────────────────────────
 (function(){
   var dot  = document.getElementById('cursor');
   var ring = document.getElementById('cursor-ring');
@@ -25,8 +24,6 @@
   document.addEventListener('mouseenter', function(){
     dot.style.opacity='1'; ring.style.opacity='1'; visible=true;
   });
-
-  // ring lerps behind with RAF
   var lerp = 0.13;
   function tick(){
     rx += (mx - rx) * lerp;
@@ -35,12 +32,9 @@
     ring.style.top  = ry+'px';
     requestAnimationFrame(tick);
   }
-  // hide initially until first mousemove
   dot.style.opacity='0'; ring.style.opacity='0';
   requestAnimationFrame(tick);
 })();
-// ─────────────────────────────────────────────────────────────────────────────
-
 let po=false;
 try{(function injectContent(){
   const D = FIZZ_DATA;
@@ -301,7 +295,7 @@ uptime(); setInterval(uptime,1000);
 (async function(){
   const svEl = document.getElementById('sv');
   if(!svEl) return;
-  const NS  = 'fizzdev';   // ← change to your username/domain
+  const NS  = 'fizzdev';
   const KEY = 'visitors';
   try{
     const res  = await fetch('https://api.counterapi.dev/v1/'+NS+'/'+KEY+'/up');
@@ -358,7 +352,7 @@ setTimeout(tick,2200);
   var audio  = document.getElementById('mp-audio');
   var vis    = document.getElementById('mp-vis');
   var visCtx = vis ? vis.getContext('2d') : null;
-  if (!audio) return; // nothing to attach to
+  if (!audio) return;
   function initWebAudio() {
     if (audioReady) return;
     try {
