@@ -531,7 +531,7 @@ setTimeout(tick,2200);
     function probe(n) {
       if (n > MAX) return Promise.resolve();
       return probeTrack(n).then(function (t) {
-        if (!t) return; // gap — stop
+        if (!t) return;
         result.push(t);
         return probe(n + 1);
       });
