@@ -6,24 +6,38 @@
   var rx=mx, ry=my;
   var visible = false;
 
+  function showCursor(){ dot.style.opacity='1'; ring.style.opacity='1'; visible=true; }
+  function hideCursor(){ dot.style.opacity='0'; ring.style.opacity='0'; visible=false; }
+  function attachShields(){
+    document.querySelectorAll('iframe').forEach(function(fr){
+      if(fr.dataset.shielded) return;
+      fr.dataset.shielded = '1';
+      var wrap = fr.parentElement;
+      if(!wrap) return;
+      if(getComputedStyle(wrap).position === 'static') wrap.style.position = 'relative';
+      var shield = document.createElement('div');
+      shield.className = 'iframe-shield';
+      wrap.appendChild(shield);
+    });
+  }
+  attachShields();
+  setTimeout(attachShields, 1500);
   document.addEventListener('mousemove', function(e){
     mx = e.clientX; my = e.clientY;
-    if(!visible){ rx=mx; ry=my; visible=true; dot.style.opacity='1'; ring.style.opacity='1'; }
-    // snap dot immediately
+    if(!visible){ rx=mx; ry=my; showCursor(); }
     dot.style.left = mx+'px';
     dot.style.top  = my+'px';
-    // hover detection
     var t = e.target;
     var isHoverable = t && (t.closest('a,button,[data-neon],.pill-a,.mp-btn,.p-tab,.p-close,.mp-q-item') !== null);
     document.body.classList.toggle('cursor-hover', !!isHoverable);
   }, {passive:true});
-
-  document.addEventListener('mouseleave', function(){
-    dot.style.opacity='0'; ring.style.opacity='0'; visible=false;
+  document.addEventListener('mouseleave', function(e){
+    if(e.clientY <= 0 || e.clientX <= 0 ||
+       e.clientX >= window.innerWidth || e.clientY >= window.innerHeight){
+      hideCursor();
+    }
   });
-  document.addEventListener('mouseenter', function(){
-    dot.style.opacity='1'; ring.style.opacity='1'; visible=true;
-  });
+  document.addEventListener('mouseenter', function(){ showCursor(); });
   var lerp = 0.13;
   function tick(){
     rx += (mx - rx) * lerp;
@@ -32,7 +46,7 @@
     ring.style.top  = ry+'px';
     requestAnimationFrame(tick);
   }
-  dot.style.opacity='0'; ring.style.opacity='0';
+  hideCursor();
   requestAnimationFrame(tick);
 })();
 let po=false;
@@ -295,7 +309,7 @@ uptime(); setInterval(uptime,1000);
 (async function(){
   const svEl = document.getElementById('sv');
   if(!svEl) return;
-  const NS  = 'fizzdev';
+  const NS  = 'fizzdev';   // ← change to your username/domain
   const KEY = 'visitors';
   try{
     const res  = await fetch('https://api.counterapi.dev/v1/'+NS+'/'+KEY+'/up');
@@ -352,7 +366,7 @@ setTimeout(tick,2200);
   var audio  = document.getElementById('mp-audio');
   var vis    = document.getElementById('mp-vis');
   var visCtx = vis ? vis.getContext('2d') : null;
-  if (!audio) return;
+  if (!audio) return; // nothing to attach to
   function initWebAudio() {
     if (audioReady) return;
     try {
