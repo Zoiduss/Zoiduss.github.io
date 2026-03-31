@@ -261,10 +261,10 @@ uptime(); setInterval(uptime,1000);
   const NS  = 'fizzdev';   // ← change to your username/domain
   const KEY = 'visitors';
   try{
-    const res  = await fetch('https://api.countapi.xyz/hit/'+NS+'/'+KEY);
+    const res  = await fetch('https://api.counterapi.dev/v1/'+NS+'/'+KEY+'/up');
     const data = await res.json();
-    if(data.value != null){
-      const target = data.value;
+    if(data.count != null){
+      const target = data.count;
       let cur = Math.max(0, target - 40);
       const step = () => {
         cur = Math.min(cur + Math.ceil((target - cur) / 6 + 1), target);
