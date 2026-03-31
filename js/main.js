@@ -255,6 +255,31 @@ function uptime(){
   el.textContent=d>=1?d+'d '+String(h).padStart(2,'0')+'h':String(h).padStart(2,'0')+'h';
 }
 uptime(); setInterval(uptime,1000);
+(async function(){
+  const svEl = document.getElementById('sv');
+  if(!svEl) return;
+  const NS  = 'fizzdev';   // ← change to your username/domain
+  const KEY = 'visitors';
+  try{
+    const res  = await fetch('https://api.countapi.xyz/hit/'+NS+'/'+KEY);
+    const data = await res.json();
+    if(data.value != null){
+      const target = data.value;
+      let cur = Math.max(0, target - 40);
+      const step = () => {
+        cur = Math.min(cur + Math.ceil((target - cur) / 6 + 1), target);
+        svEl.textContent = cur.toLocaleString();
+        if(cur < target) requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    }
+  } catch(e) {
+    const v = parseInt(localStorage.getItem('fizz_visits')||'0', 10) + 1;
+    localStorage.setItem('fizz_visits', v);
+    svEl.textContent = v.toLocaleString();
+  }
+})();
+https://api.countapi.xyz/create?namespace=zoiduss&key=visitors
 const PH=[
   (typeof FIZZ_DATA!=='undefined'&&FIZZ_DATA.meta?.name)    || 'FIZZ',
   (typeof FIZZ_DATA!=='undefined'&&FIZZ_DATA.meta?.subtitle) || 'Game Designer'
