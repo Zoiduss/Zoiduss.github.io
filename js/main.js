@@ -279,7 +279,6 @@ uptime(); setInterval(uptime,1000);
     svEl.textContent = v.toLocaleString();
   }
 })();
-https://api.countapi.xyz/create?namespace=zoiduss&key=visitors
 const PH=[
   (typeof FIZZ_DATA!=='undefined'&&FIZZ_DATA.meta?.name)    || 'FIZZ',
   (typeof FIZZ_DATA!=='undefined'&&FIZZ_DATA.meta?.subtitle) || 'Game Designer'
