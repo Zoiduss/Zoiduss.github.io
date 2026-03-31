@@ -1,3 +1,46 @@
+// ── Custom cursor ────────────────────────────────────────────────────────────
+(function(){
+  var dot  = document.getElementById('cursor');
+  var ring = document.getElementById('cursor-ring');
+  if(!dot || !ring) return;
+  var mx=window.innerWidth/2, my=window.innerHeight/2;
+  var rx=mx, ry=my;
+  var visible = false;
+
+  document.addEventListener('mousemove', function(e){
+    mx = e.clientX; my = e.clientY;
+    if(!visible){ rx=mx; ry=my; visible=true; dot.style.opacity='1'; ring.style.opacity='1'; }
+    // snap dot immediately
+    dot.style.left = mx+'px';
+    dot.style.top  = my+'px';
+    // hover detection
+    var t = e.target;
+    var isHoverable = t && (t.closest('a,button,[data-neon],.pill-a,.mp-btn,.p-tab,.p-close,.mp-q-item') !== null);
+    document.body.classList.toggle('cursor-hover', !!isHoverable);
+  }, {passive:true});
+
+  document.addEventListener('mouseleave', function(){
+    dot.style.opacity='0'; ring.style.opacity='0'; visible=false;
+  });
+  document.addEventListener('mouseenter', function(){
+    dot.style.opacity='1'; ring.style.opacity='1'; visible=true;
+  });
+
+  // ring lerps behind with RAF
+  var lerp = 0.13;
+  function tick(){
+    rx += (mx - rx) * lerp;
+    ry += (my - ry) * lerp;
+    ring.style.left = rx+'px';
+    ring.style.top  = ry+'px';
+    requestAnimationFrame(tick);
+  }
+  // hide initially until first mousemove
+  dot.style.opacity='0'; ring.style.opacity='0';
+  requestAnimationFrame(tick);
+})();
+// ─────────────────────────────────────────────────────────────────────────────
+
 let po=false;
 try{(function injectContent(){
   const D = FIZZ_DATA;
