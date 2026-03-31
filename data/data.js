@@ -98,7 +98,7 @@ const FIZZ_DATA = {
   marquee: [
     'Contributed to 1.4B Visits',
     'Fast & Reliable',
-    'Contributed to 1.3M Subscribers',
+    '   Contributed to 1.3M Subscribers',
     'Staff in 250K+ Server',
     'Flexible & Unlocked Rates',
     'Modeler',
